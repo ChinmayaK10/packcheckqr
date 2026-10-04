@@ -4,7 +4,7 @@
   "includeFiles": "app/static/**",
   "rewrites": [
     {
-      "source": "/(?<path>.*)",
+      "source": "/:path*",
       "destination": "/index.py"
     }
   ]

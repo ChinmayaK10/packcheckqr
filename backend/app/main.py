@@ -452,7 +452,6 @@ def staff_update(request_id: int, body: StatusIn):
 
 
 @app.post("/api/admin/rooms/bulk")
-@app.post("/api/admin/rooms/bulk/")
 async def bulk_rooms(request: Request, x_api_key: Optional[str] = Header(None)):
     require_admin(x_api_key)
     try:
