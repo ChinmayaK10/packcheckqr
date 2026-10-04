@@ -105,9 +105,16 @@ Vercel can deploy both services from the same GitHub repository. Create two sepa
 demo_main_backend
 ```
 
-3. Leave Build Command and Output Directory empty/default.
-4. Deploy.
-5. After deployment:
+3. Keep Output Directory blank.
+4. For Build Command, either leave it blank or set it to:
+
+```text
+python -V
+```
+
+Do not type `empty/default` into the field.
+5. Deploy.
+6. After deployment:
 
 ```text
 Dashboard: https://your-demo-project.vercel.app/
@@ -134,8 +141,15 @@ MAIN_BACKEND_API_KEY=
 SESSION_TTL_SECONDS=1800
 ```
 
-4. Leave Build Command and Output Directory empty/default.
-5. Deploy.
+4. Keep Output Directory blank.
+5. For Build Command, either leave it blank or set it to:
+
+```text
+python -V
+```
+
+Do not type `empty/default` into the field.
+6. Deploy.
 
 After deployment:
 

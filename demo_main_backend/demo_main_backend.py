@@ -120,16 +120,18 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path == "/":
+        path = self.path.split("?", 1)[0]
+        if path in ("/", "/in", "/index.py"):
             return self._html(200, DASHBOARD)
-        if self.path == "/api/requests":
+        if path == "/api/requests":
             with lock:
                 return self._reply(200, {"count": count, "requests": list(reversed(requests_log[-100:]))})
         return self._reply(404, {"error": "not found"})
 
     def do_POST(self):
         global count
-        if self.path != "/in":
+        path = self.path.split("?", 1)[0]
+        if path not in ("/in", "/index.py"):
             return self._reply(404, {"error": "use POST /in"})
         if API_KEY and self.headers.get("Authorization") != f"Bearer {API_KEY}":
             print("Rejected a request with a wrong or missing API key")
