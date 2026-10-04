@@ -160,6 +160,15 @@ class BulkRoomsIn(BaseModel):
     rooms: list[RoomIn]
 
 
+@app.get("/")
+def root():
+    return {
+        "ok": True,
+        "service": "Hotel QR backend",
+        "routes": ["/health", "/staff", "/r/{token}"]
+    }
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
