@@ -442,20 +442,35 @@ def staff_update(request_id: int, body: StatusIn):
     raise HTTPException(404, "Request not found")
 
 
-@app.post("/api/admin/rooms/bulk", dependencies=[Depends(require_admin)])
-def bulk_rooms(body: BulkRoomsIn):
+@app.api_route("/api/admin/rooms/bulk", methods=["POST", "GET"])
+@app.api_route("/api/admin/rooms/bulk/", methods=["POST", "GET"])
+async def bulk_rooms(request: Request, x_api_key: Optional[str] = Header(None)):
+    require_admin(x_api_key)
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    hotel_id = str(data.get("hotel_id", ""))
+    hotel_name = str(data.get("hotel_name", ""))
+    rooms = data.get("rooms", [])
+
     count = 0
-    for r in body.rooms:
+    for r in rooms:
+        token = str(r.get("token", ""))
+        floor = int(r.get("floor", 1))
+        room_number = str(r.get("room_number", ""))
+
         for rm in list(rooms_db.values()):
-            if rm["hotel_id"] == body.hotel_id and rm["room_number"] == r.room_number:
+            if rm["hotel_id"] == hotel_id and rm["room_number"] == room_number:
                 rm["active"] = False
 
-        rooms_db[r.token] = {
-            "token": r.token,
-            "hotel_id": body.hotel_id,
-            "hotel_name": body.hotel_name,
-            "floor": r.floor,
-            "room_number": r.room_number,
+        rooms_db[token] = {
+            "token": token,
+            "hotel_id": hotel_id,
+            "hotel_name": hotel_name,
+            "floor": floor,
+            "room_number": room_number,
             "active": True,
         }
         count += 1
