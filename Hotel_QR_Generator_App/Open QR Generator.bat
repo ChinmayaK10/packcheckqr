@@ -1,36 +1,29 @@
 @echo off
-setlocal
-set "ROOT=%~dp0"
-set "VENV=%ROOT%.venv"
+cd /d "%~dp0"
 
 echo ========================================================
 echo               Hotel QR Code Generator
 echo ========================================================
 echo.
 
-:: Check if Python is installed
-py -3 --version >nul 2>&1
+:: Use system Python directly - simpler and always works
+python --version >nul 2>&1
 if %errorlevel% neq 0 (
-  python --version >nul 2>&1
-  if %errorlevel% neq 0 (
-    echo [ERROR] Python 3 is not installed on this computer.
-    echo Please download and install Python from https://www.python.org/downloads/
-    echo (Make sure to check "Add Python to PATH" during installation).
-    echo.
-    pause
-    exit /b 1
-  )
+  echo [ERROR] Python is not installed or not in PATH.
+  echo Download from https://www.python.org/downloads/
+  echo Make sure "Add Python to PATH" is checked.
+  pause
+  exit /b 1
 )
 
-:: Automatically create virtual environment if missing
-if not exist "%VENV%\Scripts\python.exe" (
-  echo Creating Python environment (.venv)...
-  py -3 -m venv "%VENV%" 2>nul || python -m venv "%VENV%"
-)
-
-echo Installing required packages (qrcode, pillow)...
-"%VENV%\Scripts\python.exe" -m pip install -r "%ROOT%requirements.txt" --quiet
+echo Checking packages...
+python -m pip install "qrcode[pil]>=7.4" "pillow>=10.2" --quiet
 
 echo Launching Hotel QR Generator...
-start "" "%VENV%\Scripts\pythonw.exe" "%ROOT%qr_generator_app.py"
+python qr_generator_app.py
 
+if %errorlevel% neq 0 (
+  echo.
+  echo [ERROR] App crashed. See error above.
+  pause
+)

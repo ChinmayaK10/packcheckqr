@@ -425,6 +425,8 @@ def staff_update(request_id: int, body: StatusIn):
     raise HTTPException(404, "Request not found")
 
 
+@app.post("/api/admin/rooms/bulk")
+@app.post("/api/admin/rooms/bulk/")
 async def bulk_rooms(request: Request, x_api_key: Optional[str] = Header(None)):
     require_admin(x_api_key)
     try:
@@ -456,11 +458,6 @@ async def bulk_rooms(request: Request, x_api_key: Optional[str] = Header(None)):
         }
         count += 1
     return {"registered": count}
-
-
-# Register with explicit add_api_route to avoid decorator-stacking issues
-app.add_api_route("/api/admin/rooms/bulk", bulk_rooms, methods=["GET", "POST"])
-app.add_api_route("/api/admin/rooms/bulk/", bulk_rooms, methods=["GET", "POST"])
 
 
 @app.delete("/api/admin/rooms/{hotel_id}/{room_number}", dependencies=[Depends(require_admin)])
