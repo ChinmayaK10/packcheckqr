@@ -8,7 +8,7 @@ from typing import Literal, Optional
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -91,6 +91,26 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def vercel_path_rewrite(request: Request, call_next):
+    raw_path = request.scope.get("path", "")
+    if raw_path in ("/index.py", "/index", "/api/index.py"):
+        matched = (
+            request.headers.get("x-matched-path")
+            or request.headers.get("x-forwarded-uri")
+            or request.headers.get("x-original-uri")
+        )
+        if matched:
+            clean_path = matched.split("?")[0]
+            if clean_path not in ("/index.py", "/index", "/api/index.py"):
+                request.scope["path"] = clean_path
+            else:
+                request.scope["path"] = "/"
+        else:
+            request.scope["path"] = "/"
+    return await call_next(request)
+
+
 def norm(value: str) -> str:
     return "".join(value.split()).upper()
 
@@ -153,13 +173,13 @@ class BulkRoomsIn(BaseModel):
 
 
 @app.get("/")
-@app.get("/index.py")
 def root():
     return {
         "ok": True,
         "service": "Hotel QR backend",
         "routes": ["/health", "/staff", "/r/{token}", "/api/room/{token}"]
     }
+
 
 
 @app.get("/health")
