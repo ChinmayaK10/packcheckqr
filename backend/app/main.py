@@ -18,7 +18,8 @@ load_dotenv()
 
 BASE = Path(__file__).parent
 STATIC = BASE / "static"
-DB_PATH = os.getenv("DB_PATH", str(BASE.parent / "hotel.db"))
+DEFAULT_DB_PATH = ":memory:" if os.getenv("VERCEL") or os.getenv("NO_DB") == "1" else str(BASE.parent / "hotel.db")
+DB_PATH = os.getenv("DB_PATH", DEFAULT_DB_PATH)
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
 STAFF_API_KEY = os.getenv("STAFF_API_KEY", "staff-secret")
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "admin-secret")
@@ -67,6 +68,8 @@ CREATE INDEX IF NOT EXISTS idx_requests_room
 
 @contextmanager
 def db():
+    db_dir = Path(DB_PATH).parent
+    db_dir.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     try:
