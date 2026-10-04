@@ -1,5 +1,6 @@
 import asyncio
 import hmac
+import json
 import os
 import time
 from contextlib import asynccontextmanager
@@ -41,6 +42,421 @@ _verify_attempts: dict[str, list[float]] = {}
 rooms_db: dict[str, dict] = {}
 requests_db: list[dict] = []
 next_request_id: int = 1
+
+ROOMS_FILE_PATHS = [
+    BASE / "rooms.json",
+    BASE.parent / "rooms.json",
+    Path.cwd() / "backend" / "app" / "rooms.json",
+    Path.cwd() / "app" / "rooms.json",
+    Path.cwd() / "rooms.json",
+    Path.cwd() / "taj" / "rooms.json",
+    BASE.parent / "taj" / "rooms.json",
+]
+
+
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+
+def get_db_conn():
+    if not DATABASE_URL:
+        return None
+    try:
+        import psycopg2
+        url = DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        conn = psycopg2.connect(url, connect_timeout=5)
+        return conn
+    except Exception as exc:
+        print(f"Warning: Cloud Database connection error: {exc}")
+        return None
+
+
+def init_db_tables():
+    conn = get_db_conn()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS hotels (
+                id VARCHAR(64) PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                admin_key VARCHAR(255),
+                staff_key VARCHAR(255),
+                webhook_url TEXT,
+                created_at DOUBLE PRECISION
+            );
+
+            CREATE TABLE IF NOT EXISTS rooms (
+                token VARCHAR(64) PRIMARY KEY,
+                hotel_id VARCHAR(64) NOT NULL,
+                hotel_name VARCHAR(255) NOT NULL,
+                floor INT NOT NULL,
+                room_number VARCHAR(20) NOT NULL,
+                active BOOLEAN DEFAULT TRUE,
+                created_at DOUBLE PRECISION
+            );
+
+            CREATE TABLE IF NOT EXISTS requests (
+                id SERIAL PRIMARY KEY,
+                hotel_id VARCHAR(64) NOT NULL,
+                room_number VARCHAR(20) NOT NULL,
+                type VARCHAR(32) NOT NULL,
+                message TEXT,
+                preferred_time VARCHAR(64),
+                status VARCHAR(32) NOT NULL DEFAULT 'new',
+                created_at DOUBLE PRECISION NOT NULL,
+                updated_at DOUBLE PRECISION NOT NULL,
+                forward_status VARCHAR(32) DEFAULT 'pending',
+                forward_attempts INT DEFAULT 0
+            );
+            """)
+            conn.commit()
+            print("Successfully connected and initialized Supabase PostgreSQL database tables.")
+    except Exception as exc:
+        print(f"Error initializing DB tables: {exc}")
+    finally:
+        conn.close()
+
+
+init_db_tables()
+
+
+def load_rooms_db():
+    for p in ROOMS_FILE_PATHS:
+        if p.is_file():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                hotel_id = str(data.get("hotel_id", ""))
+                hotel_name = str(data.get("hotel_name", ""))
+                rooms = data.get("rooms", [])
+                for r in rooms:
+                    token = str(r.get("token", ""))
+                    if not token:
+                        continue
+                    floor = int(r.get("floor", 1))
+                    room_number = str(r.get("room_number", ""))
+                    if token not in rooms_db:
+                        rooms_db[token] = {
+                            "token": token,
+                            "hotel_id": hotel_id,
+                            "hotel_name": hotel_name,
+                            "floor": floor,
+                            "room_number": room_number,
+                            "active": r.get("active", True),
+                        }
+            except Exception as exc:
+                print(f"Warning: Failed to load {p}: {exc}")
+
+
+def save_rooms_db():
+    try:
+        target = BASE / "rooms.json"
+        hotel_id = "hotel"
+        hotel_name = "Hotel"
+        rooms_list = []
+        for rm in rooms_db.values():
+            hotel_id = rm.get("hotel_id", hotel_id)
+            hotel_name = rm.get("hotel_name", hotel_name)
+            rooms_list.append({
+                "floor": rm.get("floor", 1),
+                "room_number": rm.get("room_number", ""),
+                "token": rm.get("token", ""),
+                "active": rm.get("active", True),
+            })
+        target.write_text(json.dumps({"hotel_id": hotel_id, "hotel_name": hotel_name, "rooms": rooms_list}, indent=2), encoding="utf-8")
+    except Exception as exc:
+        print(f"Warning: Could not persist rooms_db: {exc}")
+
+
+def get_room_from_db(token: str) -> Optional[dict]:
+    conn = get_db_conn()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT token, hotel_id, hotel_name, floor, room_number, active FROM rooms WHERE token = %s;", (token,))
+                row = cur.fetchone()
+                if row:
+                    room = {
+                        "token": row[0],
+                        "hotel_id": row[1],
+                        "hotel_name": row[2],
+                        "floor": row[3],
+                        "room_number": row[4],
+                        "active": bool(row[5]),
+                    }
+                    rooms_db[token] = room
+                    return room
+        except Exception as exc:
+            print(f"DB error fetching room {token}: {exc}")
+        finally:
+            conn.close()
+
+    if token not in rooms_db:
+        load_rooms_db()
+    return rooms_db.get(token)
+
+
+def db_bulk_register(hotel_id: str, hotel_name: str, rooms: list) -> int:
+    conn = get_db_conn()
+    count = 0
+    now = time.time()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                for r in rooms:
+                    t = str(r.get("token", ""))
+                    fl = int(r.get("floor", 1))
+                    rn = str(r.get("room_number", ""))
+                    cur.execute("""
+                    INSERT INTO rooms (token, hotel_id, hotel_name, floor, room_number, active, created_at)
+                    VALUES (%s, %s, %s, %s, %s, TRUE, %s)
+                    ON CONFLICT (token) DO UPDATE SET
+                        hotel_id = EXCLUDED.hotel_id,
+                        hotel_name = EXCLUDED.hotel_name,
+                        floor = EXCLUDED.floor,
+                        room_number = EXCLUDED.room_number,
+                        active = TRUE;
+                    """, (t, hotel_id, hotel_name, fl, rn, now))
+                    count += 1
+                conn.commit()
+        except Exception as exc:
+            print(f"DB error in bulk register: {exc}")
+        finally:
+            conn.close()
+
+    for r in rooms:
+        token = str(r.get("token", ""))
+        floor = int(r.get("floor", 1))
+        room_number = str(r.get("room_number", ""))
+        rooms_db[token] = {
+            "token": token,
+            "hotel_id": hotel_id,
+            "hotel_name": hotel_name,
+            "floor": floor,
+            "room_number": room_number,
+            "active": True,
+        }
+    save_rooms_db()
+    return count if conn else len(rooms)
+
+
+def db_create_request(hotel_id: str, room_number: str, type_: str, message: str, preferred_time: str, forward_status: str) -> dict:
+    now = time.time()
+    conn = get_db_conn()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                INSERT INTO requests (hotel_id, room_number, type, message, preferred_time, status, created_at, updated_at, forward_status, forward_attempts)
+                VALUES (%s, %s, %s, %s, %s, 'new', %s, %s, %s, 0)
+                RETURNING id;
+                """, (hotel_id, room_number, type_, message, preferred_time, now, now, forward_status))
+                req_id = cur.fetchone()[0]
+                conn.commit()
+                req_obj = {
+                    "id": req_id,
+                    "hotel_id": hotel_id,
+                    "room_number": room_number,
+                    "type": type_,
+                    "message": message,
+                    "preferred_time": preferred_time,
+                    "status": "new",
+                    "created_at": now,
+                    "updated_at": now,
+                    "forward_status": forward_status,
+                    "forward_attempts": 0
+                }
+                requests_db.append(req_obj)
+                return req_obj
+        except Exception as exc:
+            print(f"DB error creating request: {exc}")
+        finally:
+            conn.close()
+
+    global next_request_id
+    req_id = next_request_id
+    next_request_id += 1
+    req_obj = {
+        "id": req_id,
+        "hotel_id": hotel_id,
+        "room_number": room_number,
+        "type": type_,
+        "message": message,
+        "preferred_time": preferred_time,
+        "status": "new",
+        "created_at": now,
+        "updated_at": now,
+        "forward_status": forward_status,
+        "forward_attempts": 0
+    }
+    requests_db.append(req_obj)
+    return req_obj
+
+
+def db_get_my_requests(hotel_id: str, room_number: str) -> list[dict]:
+    conn = get_db_conn()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                SELECT id, type, message, preferred_time, status, created_at
+                FROM requests
+                WHERE hotel_id = %s AND room_number = %s AND created_at > %s
+                ORDER BY id DESC LIMIT 50;
+                """, (hotel_id, room_number, time.time() - 86400))
+                rows = cur.fetchall()
+                return [
+                    {
+                        "id": r[0],
+                        "type": r[1],
+                        "message": r[2],
+                        "preferred_time": r[3],
+                        "status": r[4],
+                        "created_at": r[5],
+                    } for r in rows
+                ]
+        except Exception as exc:
+            print(f"DB error fetching my requests: {exc}")
+        finally:
+            conn.close()
+
+    now = time.time()
+    return [
+        {
+            "id": r["id"],
+            "type": r["type"],
+            "message": r["message"],
+            "preferred_time": r["preferred_time"],
+            "status": r["status"],
+            "created_at": r["created_at"],
+        }
+        for r in reversed(requests_db)
+        if r["hotel_id"] == hotel_id
+        and r["room_number"] == room_number
+        and r["created_at"] > now - 86400
+    ]
+
+
+def db_get_staff_requests(status_filter: Optional[str], hotel_id_filter: Optional[str], limit: int) -> list[dict]:
+    conn = get_db_conn()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                query = """
+                SELECT req.id, req.hotel_id, req.room_number, rm.floor, req.type, req.message, req.preferred_time, req.status, req.created_at, req.updated_at, req.forward_status
+                FROM requests req
+                LEFT JOIN rooms rm ON req.hotel_id = rm.hotel_id AND req.room_number = rm.room_number
+                WHERE 1=1
+                """
+                params = []
+                if status_filter:
+                    query += " AND req.status = %s"
+                    params.append(status_filter)
+                if hotel_id_filter:
+                    query += " AND req.hotel_id = %s"
+                    params.append(hotel_id_filter)
+                query += " ORDER BY req.id DESC LIMIT %s;"
+                params.append(min(limit, 500))
+
+                cur.execute(query, params)
+                rows = cur.fetchall()
+                return [
+                    {
+                        "id": r[0],
+                        "hotel_id": r[1],
+                        "room_number": r[2],
+                        "floor": r[3],
+                        "type": r[4],
+                        "message": r[5],
+                        "preferred_time": r[6],
+                        "status": r[7],
+                        "created_at": r[8],
+                        "updated_at": r[9],
+                        "forward_status": r[10],
+                    } for r in rows
+                ]
+        except Exception as exc:
+            print(f"DB error fetching staff requests: {exc}")
+        finally:
+            conn.close()
+
+    results = []
+    for r in reversed(requests_db):
+        if status_filter and r["status"] != status_filter:
+            continue
+        if hotel_id_filter and r["hotel_id"] != hotel_id_filter:
+            continue
+
+        floor = None
+        for rm in rooms_db.values():
+            if rm["hotel_id"] == r["hotel_id"] and rm["room_number"] == r["room_number"]:
+                floor = rm.get("floor")
+                break
+
+        results.append({
+            "id": r["id"],
+            "hotel_id": r["hotel_id"],
+            "room_number": r["room_number"],
+            "floor": floor,
+            "type": r["type"],
+            "message": r["message"],
+            "preferred_time": r["preferred_time"],
+            "status": r["status"],
+            "created_at": r["created_at"],
+            "updated_at": r["updated_at"],
+            "forward_status": r["forward_status"],
+        })
+        if len(results) >= min(limit, 500):
+            break
+    return results
+
+
+def db_update_staff_request(request_id: int, new_status: str) -> dict:
+    conn = get_db_conn()
+    now = time.time()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE requests SET status = %s, updated_at = %s WHERE id = %s;", (new_status, now, request_id))
+                conn.commit()
+        except Exception as exc:
+            print(f"DB error updating request status: {exc}")
+        finally:
+            conn.close()
+
+    for r in requests_db:
+        if r["id"] == request_id:
+            r["status"] = new_status
+            r["updated_at"] = now
+            return {"id": request_id, "status": new_status}
+    return {"id": request_id, "status": new_status}
+
+
+def db_deactivate_room(hotel_id: str, room_number: str) -> bool:
+    conn = get_db_conn()
+    deactivated = False
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE rooms SET active = FALSE WHERE hotel_id = %s AND room_number = %s;", (hotel_id, room_number))
+                conn.commit()
+                deactivated = cur.rowcount > 0
+        except Exception as exc:
+            print(f"DB error deactivating room: {exc}")
+        finally:
+            conn.close()
+
+    for rm in rooms_db.values():
+        if rm["hotel_id"] == hotel_id and rm["room_number"] == room_number:
+            rm["active"] = False
+            deactivated = True
+    save_rooms_db()
+    return deactivated
+
+
+load_rooms_db()
 EMBEDDED_HTML: dict[str, str] = {
     "guest.html": """<!DOCTYPE html>
 <html lang="en">
@@ -179,6 +595,7 @@ def read_static(filename: str) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    load_rooms_db()
     if SECRET_KEY == "change-me" or STAFF_API_KEY == "staff-secret" or ADMIN_API_KEY == "admin-secret":
         print("WARNING: default secrets in use. Set SECRET_KEY, STAFF_API_KEY and ADMIN_API_KEY in .env")
     task = asyncio.create_task(retry_loop()) if MAIN_BACKEND_URL else None
@@ -288,7 +705,7 @@ def room_from_session(session: Optional[str]) -> dict:
         raise HTTPException(401, "Invalid session.")
 
     token = data.get("t")
-    room = rooms_db.get(token)
+    room = get_room_from_db(token)
     if not room or not room.get("active", True):
         raise HTTPException(401, "This QR code is no longer active.")
     return room
@@ -358,7 +775,7 @@ def staff_page():
 
 @app.get("/api/room/{token}")
 def room_info(token: str):
-    room = rooms_db.get(token)
+    room = get_room_from_db(token)
     if not room or not room.get("active", True):
         raise HTTPException(404, "This QR code is not valid.")
     return {"hotel_name": room["hotel_name"]}
@@ -366,7 +783,7 @@ def room_info(token: str):
 
 @app.post("/api/verify")
 def verify(body: VerifyIn):
-    room = rooms_db.get(body.token)
+    room = get_room_from_db(body.token)
     if not room or not room.get("active", True):
         raise HTTPException(404, "This QR code is not valid.")
 
@@ -390,7 +807,6 @@ async def create_request(
     background: BackgroundTasks,
     x_session: Optional[str] = Header(None),
 ):
-    global next_request_id
     room = room_from_session(x_session)
     message = body.message.strip()
     if body.type == "room_service" and len(message) < 2:
@@ -407,91 +823,34 @@ async def create_request(
         raise HTTPException(429, "Too many requests from this room. Please call reception.")
 
     forward_status = "pending" if MAIN_BACKEND_URL else "disabled"
-    request_id = next_request_id
-    next_request_id += 1
-
-    req_obj = {
-        "id": request_id,
-        "hotel_id": room["hotel_id"],
-        "room_number": room["room_number"],
-        "type": body.type,
-        "message": message,
-        "preferred_time": body.preferred_time.strip(),
-        "status": "new",
-        "created_at": now,
-        "updated_at": now,
-        "forward_status": forward_status,
-        "forward_attempts": 0,
-    }
-    requests_db.append(req_obj)
+    req_obj = db_create_request(
+        hotel_id=room["hotel_id"],
+        room_number=room["room_number"],
+        type_=body.type,
+        message=message,
+        preferred_time=body.preferred_time.strip(),
+        forward_status=forward_status,
+    )
 
     if MAIN_BACKEND_URL:
-        await forward_request(request_id)
-    return {"id": request_id, "status": "new"}
+        await forward_request(req_obj["id"])
+    return {"id": req_obj["id"], "status": "new"}
 
 
 @app.get("/api/requests/mine")
 def my_requests(x_session: Optional[str] = Header(None)):
     room = room_from_session(x_session)
-    now = time.time()
-    rows = [
-        {
-            "id": r["id"],
-            "type": r["type"],
-            "message": r["message"],
-            "preferred_time": r["preferred_time"],
-            "status": r["status"],
-            "created_at": r["created_at"],
-        }
-        for r in reversed(requests_db)
-        if r["hotel_id"] == room["hotel_id"]
-        and r["room_number"] == room["room_number"]
-        and r["created_at"] > now - 86400
-    ]
-    return rows
+    return db_get_my_requests(room["hotel_id"], room["room_number"])
 
 
 @app.get("/api/staff/requests", dependencies=[Depends(require_staff)])
 def staff_list(status: Optional[Status] = None, hotel_id: Optional[str] = None, limit: int = 100):
-    results = []
-    for r in reversed(requests_db):
-        if status and r["status"] != status:
-            continue
-        if hotel_id and r["hotel_id"] != hotel_id:
-            continue
-
-        floor = None
-        for rm in rooms_db.values():
-            if rm["hotel_id"] == r["hotel_id"] and rm["room_number"] == r["room_number"]:
-                floor = rm.get("floor")
-                break
-
-        results.append({
-            "id": r["id"],
-            "hotel_id": r["hotel_id"],
-            "room_number": r["room_number"],
-            "floor": floor,
-            "type": r["type"],
-            "message": r["message"],
-            "preferred_time": r["preferred_time"],
-            "status": r["status"],
-            "created_at": r["created_at"],
-            "updated_at": r["updated_at"],
-            "forward_status": r["forward_status"],
-        })
-        if len(results) >= min(limit, 500):
-            break
-    return results
+    return db_get_staff_requests(status_filter=status, hotel_id_filter=hotel_id, limit=limit)
 
 
 @app.patch("/api/staff/requests/{request_id}", dependencies=[Depends(require_staff)])
 def staff_update(request_id: int, body: StatusIn):
-    for r in requests_db:
-        if r["id"] == request_id:
-            r["status"] = body.status
-            r["updated_at"] = time.time()
-            return {"id": request_id, "status": body.status}
-    raise HTTPException(404, "Request not found")
+    return db_update_staff_request(request_id, body.status)
 
 
 @app.post("/api/admin/rooms/bulk")
@@ -506,36 +865,14 @@ async def bulk_rooms(request: Request, x_api_key: Optional[str] = Header(None)):
     hotel_name = str(data.get("hotel_name", ""))
     rooms = data.get("rooms", [])
 
-    count = 0
-    for r in rooms:
-        token = str(r.get("token", ""))
-        floor = int(r.get("floor", 1))
-        room_number = str(r.get("room_number", ""))
-
-        for rm in list(rooms_db.values()):
-            if rm["hotel_id"] == hotel_id and rm["room_number"] == room_number:
-                rm["active"] = False
-
-        rooms_db[token] = {
-            "token": token,
-            "hotel_id": hotel_id,
-            "hotel_name": hotel_name,
-            "floor": floor,
-            "room_number": room_number,
-            "active": True,
-        }
-        count += 1
+    count = db_bulk_register(hotel_id, hotel_name, rooms)
     return {"registered": count}
 
 
 @app.delete("/api/admin/rooms/{hotel_id}/{room_number}", dependencies=[Depends(require_admin)])
 def deactivate_room(hotel_id: str, room_number: str):
-    deactivated = False
-    for rm in rooms_db.values():
-        if rm["hotel_id"] == hotel_id and rm["room_number"] == room_number:
-            rm["active"] = False
-            deactivated = True
-    if not deactivated:
+    ok = db_deactivate_room(hotel_id, room_number)
+    if not ok:
         raise HTTPException(404, "Room not found")
     return {"deactivated": room_number}
 
