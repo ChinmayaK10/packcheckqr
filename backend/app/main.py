@@ -378,7 +378,7 @@ def verify(body: VerifyIn):
 
 
 @app.post("/api/requests", status_code=201)
-def create_request(
+async def create_request(
     body: RequestIn,
     background: BackgroundTasks,
     x_session: Optional[str] = Header(None),
@@ -419,7 +419,7 @@ def create_request(
     requests_db.append(req_obj)
 
     if MAIN_BACKEND_URL:
-        background.add_task(forward_request, request_id)
+        await forward_request(request_id)
     return {"id": request_id, "status": "new"}
 
 
