@@ -37,17 +37,7 @@ Status = Literal["new", "in_progress", "done", "cancelled"]
 signer = URLSafeTimedSerializer(SECRET_KEY, salt="guest-session")
 _verify_attempts: dict[str, list[float]] = {}
 
-# In-memory database storage (No SQLite / DB needed)
-rooms_db: dict[str, dict] = {
-    "demo": {
-        "token": "demo",
-        "hotel_id": "demo-hotel",
-        "hotel_name": "Grand Palace Demo",
-        "floor": 3,
-        "room_number": "304",
-        "active": True
-    }
-}
+rooms_db: dict[str, dict] = {}
 requests_db: list[dict] = []
 next_request_id: int = 1
 EMBEDDED_HTML: dict[str, str] = {
