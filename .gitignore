@@ -18,3 +18,11 @@ Hotel_QR_Generator_App/.venv/
 dist/
 build/
 *.spec
+
+# Private room manifests and generated QR folders
+rooms.json
+*/rooms.json
+*/**/rooms.json
+taj/
+qr_codes/
+
