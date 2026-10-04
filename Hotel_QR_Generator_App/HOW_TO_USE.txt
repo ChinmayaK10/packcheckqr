@@ -1,0 +1,31 @@
+============================================================
+              HOTEL QR CODE GENERATOR APP
+============================================================
+
+Requirements:
+-------------
+- Windows PC with Python 3 installed (https://www.python.org/downloads/)
+  * Note: Make sure "Add Python to PATH" is checked during Python installation.
+
+Automatic Setup (No manual setup needed!):
+-----------------------------------------
+When you double-click "Open QR Generator.bat", it will AUTOMATICALLY:
+1. Create a virtual environment (.venv) on your computer.
+2. Install the required packages (qrcode and pillow).
+3. Open the desktop app!
+
+How to Use:
+-----------
+1. Double-click "Open QR Generator.bat".
+2. Enter your Hotel Name, Floors, and Rooms per floor.
+3. The live Vercel Backend URL (https://packcheckqrbg.vercel.app) and Admin Key are pre-filled automatically!
+4. Click "Generate QR Codes".
+
+Output Files:
+-------------
+Generated QR codes are saved in the "qr_codes/<hotel-id>/" folder:
+- Individual PNG sticker labels for every room (e.g. room_101.png).
+- A printable A4 PDF sheet (print_sheet.pdf) with 12 room stickers per page.
+- Manifest files (rooms.json & rooms.csv).
+
+All generated room QR tokens will automatically register with your live backend!
