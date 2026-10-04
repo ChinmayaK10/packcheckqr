@@ -4,28 +4,39 @@
 
 Requirements:
 -------------
-- Windows PC with Python 3 installed (https://www.python.org/downloads/)
-  * Note: Make sure "Add Python to PATH" is checked during Python installation.
+- Windows PC with Python 3.10+ installed (https://www.python.org/downloads/)
+  * IMPORTANT: Check "Add Python to PATH" during installation.
 
-Automatic Setup (No manual setup needed!):
------------------------------------------
-When you double-click "Open QR Generator.bat", it will AUTOMATICALLY:
-1. Create a virtual environment (.venv) on your computer.
-2. Install the required packages (qrcode and pillow).
-3. Open the desktop app!
+Quick Start (No manual setup needed!):
+--------------------------------------
+1. Double-click "Open QR Generator.bat" inside this folder.
+   It will automatically:
+     - Create a virtual environment (.venv) for clean isolation.
+     - Install required packages (qrcode, pillow, customtkinter).
+     - Launch the app.
 
-How to Use:
------------
-1. Double-click "Open QR Generator.bat".
-2. Enter your Hotel Name, Floors, and Rooms per floor.
-3. The live Vercel Backend URL (https://packcheckqrbg.vercel.app) and Admin Key are pre-filled automatically!
-4. Click "Generate QR Codes".
+2. Fill in your Hotel Name, number of Floors, Rooms per floor.
+3. The live Vercel Backend URL and Admin Key are pre-filled.
+4. Optionally click Browse to choose where QR codes are saved.
+5. Click "Generate QR Codes".
 
 Output Files:
 -------------
-Generated QR codes are saved in the "qr_codes/<hotel-id>/" folder:
-- Individual PNG sticker labels for every room (e.g. room_101.png).
-- A printable A4 PDF sheet (print_sheet.pdf) with 12 room stickers per page.
-- Manifest files (rooms.json & rooms.csv).
+Generated QR codes are saved in "qr_codes/<hotel-name>/" folder:
+  - Individual PNG sticker labels for every room (e.g. room_101.png).
+  - A printable A4 PDF sheet (print_sheet.pdf) with 12 stickers per page.
+  - Manifest files (rooms.json & rooms.csv) for record-keeping.
 
-All generated room QR tokens will automatically register with your live backend!
+All room QR tokens are automatically registered with your live backend!
+
+Sharing this app:
+-----------------
+Zip the entire "Hotel_QR_Generator_App" folder and send it.
+The recipient only needs Python 3.10+ installed, then double-click
+"Open QR Generator.bat" — everything else is handled automatically.
+
+Security Notes:
+---------------
+- Change the default Admin Key in the app before production use.
+- The rooms.json file contains secret QR tokens — keep it private.
+- Never commit .env files or rooms.json to public repositories.

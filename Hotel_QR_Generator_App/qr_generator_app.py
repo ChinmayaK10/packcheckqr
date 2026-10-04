@@ -12,8 +12,11 @@ from tkinter import filedialog, messagebox, ttk
 
 from generate_qr import build_pdf, make_label, register, room_number, slugify
 
-APP_TITLE = "Hotel QR Generator"
+import customtkinter as ctk
 
+APP_TITLE = "Hotel QR Generator"
+ctk.set_appearance_mode("System")
+ctk.set_default_color_theme("blue")
 
 def get_default_out_dir() -> Path:
     if getattr(sys, 'frozen', False):
@@ -21,76 +24,79 @@ def get_default_out_dir() -> Path:
     return Path.cwd() / "qr_codes"
 
 
-class QRGeneratorApp(tk.Tk):
+class QRGeneratorApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("760x620")
-        self.minsize(680, 560)
+        self.geometry("760x650")
+        self.minsize(700, 600)
         self.events = queue.Queue()
 
-        self.hotel_name = tk.StringVar()
-        self.hotel_id = tk.StringVar()
-        self.floors = tk.IntVar(value=3)
-        self.rooms_per_floor = tk.IntVar(value=2)
-        self.start_floor = tk.IntVar(value=1)
-        self.base_url = tk.StringVar(value="https://packcheckqrbg.vercel.app")
-        self.api_url = tk.StringVar(value="https://packcheckqrbg.vercel.app")
-        self.admin_key = tk.StringVar(value="admin-secret")
-        self.out_dir = tk.StringVar(value=str(get_default_out_dir()))
-        self.make_pdf = tk.BooleanVar(value=True)
-        self.do_register = tk.BooleanVar(value=True)
+        self.hotel_name = ctk.StringVar()
+        self.hotel_id = ctk.StringVar()
+        self.floors = ctk.IntVar(value=3)
+        self.rooms_per_floor = ctk.IntVar(value=2)
+        self.start_floor = ctk.IntVar(value=1)
+        self.base_url = ctk.StringVar(value="https://packcheckqrbg.vercel.app")
+        self.api_url = ctk.StringVar(value="https://packcheckqrbg.vercel.app")
+        self.admin_key = ctk.StringVar(value="admin-secret")
+        self.out_dir = ctk.StringVar(value=str(get_default_out_dir()))
+        self.make_pdf = ctk.BooleanVar(value=True)
+        self.do_register = ctk.BooleanVar(value=True)
 
         self._build_ui()
         self.after(150, self._drain_events)
 
     def _build_ui(self):
-        self.columnconfigure(0, weight=1)
-        root = ttk.Frame(self, padding=18)
-        root.grid(row=0, column=0, sticky="nsew")
-        root.columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        
+        main_frame = ctk.CTkFrame(self, corner_radius=15)
+        main_frame.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
+        main_frame.grid_columnconfigure(1, weight=1)
 
-        heading = ttk.Label(root, text="Hotel QR Generator", font=("Segoe UI", 18, "bold"))
-        heading.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 14))
+        heading = ctk.CTkLabel(main_frame, text="Hotel QR Generator", font=ctk.CTkFont(size=24, weight="bold"))
+        heading.grid(row=0, column=0, columnspan=3, sticky="w", padx=20, pady=(20, 15))
 
-        self._entry(root, 1, "Hotel name", self.hotel_name)
-        self._entry(root, 2, "Hotel ID", self.hotel_id, hint="Optional. Auto-created from hotel name.")
-        self._spin(root, 3, "Floors", self.floors, 1, 200)
-        self._spin(root, 4, "Rooms per floor", self.rooms_per_floor, 1, 99)
-        self._spin(root, 5, "Start floor", self.start_floor, 0, 200)
-        self._entry(root, 6, "Public QR base URL", self.base_url)
-        self._entry(root, 7, "Backend API URL", self.api_url)
-        self._entry(root, 8, "Admin key", self.admin_key, show="*")
+        self._entry(main_frame, 1, "Hotel name", self.hotel_name)
+        self._entry(main_frame, 2, "Hotel ID", self.hotel_id, hint="Optional. Auto-created if empty.")
+        
+        # Spinboxes (Using Entries for customtkinter simplicity)
+        self._entry(main_frame, 3, "Floors", self.floors)
+        self._entry(main_frame, 4, "Rooms per floor", self.rooms_per_floor)
+        self._entry(main_frame, 5, "Start floor", self.start_floor)
+        
+        self._entry(main_frame, 6, "Public QR base URL", self.base_url)
+        self._entry(main_frame, 7, "Backend API URL", self.api_url)
+        self._entry(main_frame, 8, "Admin key", self.admin_key, show="*")
 
-        ttk.Label(root, text="Output folder").grid(row=9, column=0, sticky="w", pady=6)
-        ttk.Entry(root, textvariable=self.out_dir).grid(row=9, column=1, sticky="ew", pady=6)
-        ttk.Button(root, text="Browse", command=self._browse).grid(row=9, column=2, sticky="ew", padx=(8, 0), pady=6)
+        # Output folder row
+        ctk.CTkLabel(main_frame, text="Output folder").grid(row=9, column=0, sticky="w", padx=20, pady=5)
+        ctk.CTkEntry(main_frame, textvariable=self.out_dir).grid(row=9, column=1, sticky="ew", padx=10, pady=5)
+        ctk.CTkButton(main_frame, text="Browse", command=self._browse, width=80).grid(row=9, column=2, sticky="ew", padx=(0, 20), pady=5)
 
-        checks = ttk.Frame(root)
-        checks.grid(row=10, column=1, columnspan=2, sticky="w", pady=(8, 12))
-        ttk.Checkbutton(checks, text="Create print-sheet PDF", variable=self.make_pdf).pack(side="left", padx=(0, 18))
-        ttk.Checkbutton(checks, text="Register rooms with backend", variable=self.do_register).pack(side="left")
+        # Checkboxes
+        checks_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        checks_frame.grid(row=10, column=1, columnspan=2, sticky="w", padx=10, pady=15)
+        ctk.CTkCheckBox(checks_frame, text="Create print-sheet PDF", variable=self.make_pdf).pack(side="left", padx=(0, 20))
+        ctk.CTkCheckBox(checks_frame, text="Register rooms with backend", variable=self.do_register).pack(side="left")
 
-        buttons = ttk.Frame(root)
-        buttons.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(4, 12))
-        buttons.columnconfigure(0, weight=1)
-        self.generate_button = ttk.Button(buttons, text="Generate QR Codes", command=self._start)
-        self.generate_button.grid(row=0, column=1, sticky="e")
+        # Generate Button
+        self.generate_button = ctk.CTkButton(main_frame, text="Generate QR Codes", command=self._start, height=40, font=ctk.CTkFont(size=14, weight="bold"))
+        self.generate_button.grid(row=11, column=1, columnspan=2, sticky="e", padx=20, pady=10)
 
-        self.status = ttk.Label(root, text="Ready")
-        self.status.grid(row=12, column=0, columnspan=3, sticky="w")
+        # Status and Log
+        self.status = ctk.CTkLabel(main_frame, text="Ready", font=ctk.CTkFont(size=12, slant="italic"))
+        self.status.grid(row=12, column=0, columnspan=3, sticky="w", padx=20, pady=(10, 0))
 
-        self.log = tk.Text(root, height=12, wrap="word", state="disabled")
-        self.log.grid(row=13, column=0, columnspan=3, sticky="nsew", pady=(8, 0))
-        root.rowconfigure(13, weight=1)
+        self.log = ctk.CTkTextbox(main_frame, height=120, state="disabled")
+        self.log.grid(row=13, column=0, columnspan=3, sticky="nsew", padx=20, pady=10)
+        main_frame.grid_rowconfigure(13, weight=1)
 
-    def _entry(self, parent, row, label, var, hint=None, show=None):
-        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", pady=6)
-        ttk.Entry(parent, textvariable=var, show=show).grid(row=row, column=1, columnspan=2, sticky="ew", pady=6)
-
-    def _spin(self, parent, row, label, var, start, end):
-        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", pady=6)
-        ttk.Spinbox(parent, from_=start, to=end, textvariable=var, width=10).grid(row=row, column=1, sticky="w", pady=6)
+    def _entry(self, parent, row, label, var, hint=None, show=""):
+        ctk.CTkLabel(parent, text=label).grid(row=row, column=0, sticky="w", padx=20, pady=5)
+        entry = ctk.CTkEntry(parent, textvariable=var, show=show, placeholder_text=hint)
+        entry.grid(row=row, column=1, columnspan=2, sticky="ew", padx=10, pady=5)
 
     def _browse(self):
         chosen = filedialog.askdirectory(initialdir=self.out_dir.get() or str(Path.cwd()))
@@ -103,7 +109,7 @@ class QRGeneratorApp(tk.Tk):
         except ValueError as exc:
             messagebox.showerror(APP_TITLE, str(exc))
             return
-        self.generate_button.config(state="disabled")
+        self.generate_button.configure(state="disabled")
         self._write_log("Starting generation...")
         threading.Thread(target=self._generate, args=(config,), daemon=True).start()
 
@@ -184,23 +190,23 @@ class QRGeneratorApp(tk.Tk):
                 break
             if kind == "log":
                 self._write_log(value)
-                self.status.config(text=value)
+                self.status.configure(text=value)
             elif kind == "done":
-                self.generate_button.config(state="normal")
-                self.status.config(text="Done")
+                self.generate_button.configure(state="normal")
+                self.status.configure(text="Done")
                 messagebox.showinfo(APP_TITLE, f"QR codes are ready:\n{value}")
             elif kind == "error":
-                self.generate_button.config(state="normal")
-                self.status.config(text="Failed")
+                self.generate_button.configure(state="normal")
+                self.status.configure(text="Failed")
                 messagebox.showerror(APP_TITLE, value)
                 self._write_log("ERROR: " + value)
         self.after(150, self._drain_events)
 
     def _write_log(self, text):
-        self.log.config(state="normal")
+        self.log.configure(state="normal")
         self.log.insert("end", text + "\n")
         self.log.see("end")
-        self.log.config(state="disabled")
+        self.log.configure(state="disabled")
 
 
 if __name__ == "__main__":

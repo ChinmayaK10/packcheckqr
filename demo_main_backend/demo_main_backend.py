@@ -48,30 +48,36 @@ DASHBOARD = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Demo backend requests</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f4f6f5;--panel:#fff;--ink:#17211f;--muted:#66736f;--line:#d8dfdc;--pine:#123a34;--gold:#a47e2f;--bad:#9b2c2c}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-header{background:var(--pine);color:#f6faf8;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-h1{margin:0;font-size:22px;font-weight:700}
-main{max-width:1120px;margin:0 auto;padding:24px}
-.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}
-.metric{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
-.metric strong{display:block;font-size:26px;color:var(--pine)}
-.metric span{color:var(--muted)}
-.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 14px;color:var(--muted)}
-.list{display:grid;gap:10px}
-.request{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:6px;padding:14px 16px;display:grid;grid-template-columns:100px 1fr auto;gap:12px;align-items:start}
-.room{font-size:30px;font-weight:800;line-height:1;color:var(--pine)}
-.room small{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:5px}
-.type{font-weight:700}
-.msg{margin-top:4px;white-space:pre-wrap}
-.meta{color:var(--muted);font-size:13px;margin-top:5px}
-.badge{border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:#fafafa;color:var(--muted);white-space:nowrap}
-.empty{border:1px dashed var(--line);border-radius:6px;padding:28px;text-align:center;color:var(--muted);background:#fff}
-button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:4px;padding:8px 12px;cursor:pointer;color:var(--ink)}
-button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
-@media(max-width:720px){main{padding:16px}.summary{grid-template-columns:1fr}.request{grid-template-columns:1fr}.badge{justify-self:start}}
+:root{--bg:#0f172a;--surface:rgba(30,41,59,0.7);--ink:#f8fafc;--muted:#94a3b8;--line:rgba(255,255,255,0.1);--accent:#3b82f6;--gold:#f59e0b;--err:#ef4444;--ok:#10b981;--glow:rgba(59,130,246,0.5)}
+*{box-sizing:border-box;margin:0}
+body{min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);color:var(--ink);font:400 15px/1.5 'Inter',system-ui,sans-serif}
+header{background:rgba(15,23,42,0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:10}
+h1{font-size:24px;font-weight:800;background:linear-gradient(to right,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#status{color:var(--muted);font-weight:500}
+main{max-width:1120px;margin:0 auto;padding:32px 24px 44px}
+.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:24px}
+.metric{background:var(--surface);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 10px 25px rgba(0,0,0,0.2);transition:transform 0.2s;animation:fadeUp 0.5s ease-out}
+.metric:hover{transform:translateY(-3px)}
+.metric strong{display:block;font-size:32px;font-weight:800;background:linear-gradient(to right,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.metric span{color:var(--muted);font-weight:500}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 18px;color:var(--muted);font-weight:500}
+.list{display:grid;gap:14px}
+.request{background:var(--surface);backdrop-filter:blur(8px);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:14px;padding:20px;display:grid;grid-template-columns:100px 1fr auto;gap:16px;align-items:start;box-shadow:0 8px 20px rgba(0,0,0,0.2);animation:fadeUp 0.4s ease-out;transition:transform 0.2s}
+.request:hover{transform:translateY(-2px)}
+.room{font-size:32px;font-weight:800;line-height:1;color:#fff}
+.room small{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-top:6px}
+.type{font-weight:700;font-size:17px;color:#fff}
+.msg{margin-top:6px;white-space:pre-wrap;color:var(--ink);word-break:break-word}
+.meta{color:var(--muted);font-size:13px;margin-top:8px}
+.badge{border:1px solid var(--line);border-radius:999px;padding:6px 14px;background:rgba(255,255,255,0.05);color:var(--muted);white-space:nowrap;font-weight:600;font-size:13px}
+.empty{border:2px dashed var(--line);border-radius:14px;padding:40px;text-align:center;color:var(--muted);background:rgba(255,255,255,0.02);font-size:16px;font-weight:500}
+button{font:600 14px 'Inter',system-ui,sans-serif;border:1px solid var(--line);background:rgba(255,255,255,0.08);border-radius:10px;padding:10px 18px;cursor:pointer;color:var(--ink);transition:all 0.2s}
+button:hover{background:rgba(255,255,255,0.15);transform:translateY(-1px)}
+button:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)}
+@media(max-width:720px){header,main{padding-left:16px;padding-right:16px}.summary{grid-template-columns:1fr}.request{grid-template-columns:1fr;padding:16px}.badge{justify-self:start}}
 </style>
 </head>
 <body>

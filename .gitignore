@@ -10,8 +10,11 @@ venv/
 
 # Generated QR manifests contain room tokens and should be private.
 qr_generator/qr_codes/
+Hotel_QR_Generator_App/qr_codes/
+Hotel_QR_Generator_App/.venv/
 
 # Local logs and build artifacts.
 *.log
 dist/
 build/
+*.spec
