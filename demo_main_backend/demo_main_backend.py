@@ -18,11 +18,29 @@ import threading
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import tempfile
+
 TYPES = {"checkout": "CHECK OUT", "cart": "LUGGAGE CART", "room_service": "ROOM SERVICE"}
 API_KEY = os.getenv("MAIN_BACKEND_API_KEY", "")
-count = 0
-requests_log = []
 lock = threading.Lock()
+
+DB_PATH = os.path.join(tempfile.gettempdir(), "demo_vercel_db.json")
+
+def load_db():
+    if os.path.exists(DB_PATH):
+        try:
+            with open(DB_PATH, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"count": 0, "requests": []}
+
+def save_db(data):
+    try:
+        with open(DB_PATH, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
 
 DASHBOARD = """<!DOCTYPE html>
 <html lang="en">
@@ -125,11 +143,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._html(200, DASHBOARD)
         if path == "/api/requests":
             with lock:
-                return self._reply(200, {"count": count, "requests": list(reversed(requests_log[-100:]))})
+                db = load_db()
+                return self._reply(200, {"count": db["count"], "requests": list(reversed(db["requests"][-100:]))})
         return self._reply(404, {"error": "not found"})
 
     def do_POST(self):
-        global count
         path = self.path.split("?", 1)[0]
         if path not in ("/in", "/index.py"):
             return self._reply(404, {"error": "use POST /in"})
@@ -143,9 +161,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._reply(400, {"error": "invalid JSON"})
 
         with lock:
-            count += 1
+            db = load_db()
+            db["count"] += 1
             data["received_at"] = datetime.now().strftime("%H:%M:%S")
-            requests_log.append(data)
+            db["requests"].append(data)
+            save_db(db)
+            
+        count = db["count"]
         created = datetime.fromtimestamp(data.get("created_at", 0)).strftime("%H:%M:%S")
         print("\n" + "=" * 52)
         print(f"  NEW REQUEST #{data.get('id')}   (received: {count})")
