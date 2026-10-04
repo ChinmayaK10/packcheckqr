@@ -5,6 +5,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal, Optional
+from urllib.parse import parse_qsl, unquote
 
 import httpx
 from dotenv import load_dotenv
@@ -189,6 +190,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def vercel_path_rewrite(request: Request, call_next):
+    """Recover original URL path when Vercel rewrites all requests to /index.py.
+
+    Vercel sets scope["path"] = "/index.py" and puts the actual requested path
+    in x-now-route-matches, e.g.: path=api%2Fadmin%2Frooms%2Fbulk
+    The key "path" matches the named group in vercel.json: /(?<path>.*)
+    """
+    raw_path = request.scope.get("path", "")
+    _fn_paths = ("/index.py", "/index", "/api/index.py")
+    if raw_path in _fn_paths:
+        route_matches = request.headers.get("x-now-route-matches", "")
+        original_path = "/"
+        if route_matches:
+            params = dict(parse_qsl(route_matches))
+            p = (params.get("path")
+                 or params.get("nxt_path")
+                 or params.get("nxt_p")
+                 or params.get("0")
+                 or "")
+            if p:
+                original_path = "/" + unquote(p).lstrip("/")
+        request.scope["path"] = original_path
+    return await call_next(request)
 
 
 def norm(value: str) -> str:
