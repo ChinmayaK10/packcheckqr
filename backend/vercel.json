@@ -1,7 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "python -V",
-  "includeFiles": "app/static/**",
   "rewrites": [
     {
       "source": "/(.*)",
@@ -9,4 +8,5 @@
     }
   ]
 }
+
 
