@@ -146,6 +146,8 @@ load();setInterval(load,5000);
 </html>"""
 }
 
+STATIC_CACHE: dict[str, str] = {}
+
 
 def read_static(filename: str) -> str:
     if filename in STATIC_CACHE:
@@ -187,25 +189,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.middleware("http")
-async def vercel_path_rewrite(request: Request, call_next):
-    raw_path = request.scope.get("path", "")
-    if raw_path in ("/index.py", "/index", "/api/index.py"):
-        matched = (
-            request.headers.get("x-matched-path")
-            or request.headers.get("x-forwarded-uri")
-            or request.headers.get("x-original-uri")
-        )
-        if matched:
-            clean_path = matched.split("?")[0]
-            if clean_path not in ("/index.py", "/index", "/api/index.py"):
-                request.scope["path"] = clean_path
-            else:
-                request.scope["path"] = "/"
-        else:
-            request.scope["path"] = "/"
-    return await call_next(request)
 
 
 def norm(value: str) -> str:
@@ -442,8 +425,6 @@ def staff_update(request_id: int, body: StatusIn):
     raise HTTPException(404, "Request not found")
 
 
-@app.api_route("/api/admin/rooms/bulk", methods=["POST", "GET"])
-@app.api_route("/api/admin/rooms/bulk/", methods=["POST", "GET"])
 async def bulk_rooms(request: Request, x_api_key: Optional[str] = Header(None)):
     require_admin(x_api_key)
     try:
@@ -475,6 +456,11 @@ async def bulk_rooms(request: Request, x_api_key: Optional[str] = Header(None)):
         }
         count += 1
     return {"registered": count}
+
+
+# Register with explicit add_api_route to avoid decorator-stacking issues
+app.add_api_route("/api/admin/rooms/bulk", bulk_rooms, methods=["GET", "POST"])
+app.add_api_route("/api/admin/rooms/bulk/", bulk_rooms, methods=["GET", "POST"])
 
 
 @app.delete("/api/admin/rooms/{hotel_id}/{room_number}", dependencies=[Depends(require_admin)])
