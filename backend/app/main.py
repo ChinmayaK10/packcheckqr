@@ -5,7 +5,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal, Optional
-from urllib.parse import parse_qsl, unquote
+from urllib.parse import parse_qsl, unquote, urlencode
 
 import httpx
 from dotenv import load_dotenv
@@ -180,8 +180,69 @@ async def lifespan(app: FastAPI):
         task.cancel()
 
 
+class VercelPathRewriteMiddleware:
+    """ASGI Middleware to recover original request path when deployed on Vercel."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            current_path = scope.get("path", "")
+
+            raw_qs = scope.get("query_string", b"").decode("utf-8")
+            qsl = parse_qsl(raw_qs, keep_blank_values=True)
+            qp = dict(qsl)
+
+            recovered_path = None
+
+            # 1. Query parameter 'path', 'nxt_path', or '0' (from Vercel /:path* rewrite)
+            for key in ("path", "nxt_path", "0"):
+                if key in qp and qp[key]:
+                    val = unquote(qp[key]).lstrip("/")
+                    if val and not val.endswith(".py"):
+                        recovered_path = "/" + val
+                    break
+
+            # 2. Vercel HTTP headers
+            if not recovered_path:
+                headers = dict(scope.get("headers", []))
+
+                rm = headers.get(b"x-now-route-matches", b"").decode("utf-8")
+                if rm:
+                    rm_dict = dict(parse_qsl(rm))
+                    for key in ("path", "nxt_path", "0"):
+                        if key in rm_dict and rm_dict[key]:
+                            val = unquote(rm_dict[key]).lstrip("/")
+                            if val:
+                                recovered_path = "/" + val
+                            break
+
+                if not recovered_path:
+                    mp = headers.get(b"x-matched-path", b"").decode("utf-8")
+                    if mp and not mp.endswith(".py") and mp != "/":
+                        recovered_path = mp
+
+                if not recovered_path:
+                    for h_name in (b"x-forwarded-uri", b"x-original-url", b"x-invoke-path"):
+                        val = headers.get(h_name, b"").decode("utf-8")
+                        if val and not val.endswith(".py") and val != "/":
+                            recovered_path = val.split("?")[0]
+                            break
+
+            if recovered_path and recovered_path != current_path:
+                scope["path"] = recovered_path
+                scope["raw_path"] = recovered_path.encode("utf-8")
+                # Remove synthetic path param from query string if present
+                if "path" in qp:
+                    cleaned = [(k, v) for k, v in qsl if k not in ("path", "nxt_path")]
+                    scope["query_string"] = urlencode(cleaned).encode("utf-8")
+
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(title="Hotel room service backend", lifespan=lifespan)
 
+app.add_middleware(VercelPathRewriteMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -189,28 +250,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.middleware("http")
-async def vercel_path_rewrite(request: Request, call_next):
-    """Recover the original URL path from Vercel's route-match header.
-
-    When Vercel matches /:path* and routes to this function, it sets:
-      x-now-route-matches: path=api%2Fadmin%2Frooms%2Fbulk
-    We always apply this recovery when the header is present, regardless of
-    what Vercel calls the function internally (/index.py, /fastapi, etc.).
-    """
-    route_matches = request.headers.get("x-now-route-matches", "")
-    if route_matches:
-        params = dict(parse_qsl(route_matches))
-        p = (params.get("path")
-             or params.get("nxt_path")
-             or params.get("nxt_p")
-             or params.get("0")
-             or "")
-        if p:
-            request.scope["path"] = "/" + unquote(p).lstrip("/")
-    return await call_next(request)
 
 
 
