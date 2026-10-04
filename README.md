@@ -6,7 +6,7 @@ Production-shaped demo for hotel room QR service. It has three separate parts:
 2. `backend/` is the FastAPI app guests and reception use.
 3. `demo_main_backend/` is a temporary receiver until your real backend is connected.
 
-For GitHub-based deployment and Windows launchers, see `DEPLOYMENT.md`.
+For GitHub/Vercel deployment and Windows launchers, see `DEPLOYMENT.md`.
 
 ## Quick Windows demo
 

@@ -92,6 +92,60 @@ When your real backend is ready, replace `MAIN_BACKEND_URL` with your real backe
 
 For Render, the included `render.yaml` can create both services as a blueprint. For Railway, Heroku-style platforms, or similar Python hosts, the included `Procfile` files provide the web process commands.
 
+## Vercel Deployment
+
+Vercel can deploy both services from the same GitHub repository. Create two separate Vercel projects.
+
+### Vercel Project 1: Demo Main Backend
+
+1. Import the GitHub repository in Vercel.
+2. Set Root Directory to:
+
+```text
+demo_main_backend
+```
+
+3. Leave Build Command and Output Directory empty/default.
+4. Deploy.
+5. After deployment:
+
+```text
+Dashboard: https://your-demo-project.vercel.app/
+Forward URL: https://your-demo-project.vercel.app/in
+```
+
+### Vercel Project 2: QR Backend
+
+1. Import the same GitHub repository again as another Vercel project.
+2. Set Root Directory to:
+
+```text
+backend
+```
+
+3. Add environment variables:
+
+```env
+SECRET_KEY=<long random value>
+STAFF_API_KEY=<staff password/key>
+ADMIN_API_KEY=<admin registration key>
+MAIN_BACKEND_URL=https://your-demo-project.vercel.app/in
+MAIN_BACKEND_API_KEY=
+SESSION_TTL_SECONDS=1800
+```
+
+4. Leave Build Command and Output Directory empty/default.
+5. Deploy.
+
+After deployment:
+
+```text
+Staff page: https://your-qr-project.vercel.app/staff
+Guest URLs: https://your-qr-project.vercel.app/r/<token>
+```
+
+Important Vercel note: Vercel Functions are serverless. Local SQLite files and in-memory request logs can reset between deployments or function instances. This is okay for a visual demo, but real production should use persistent storage such as Vercel Postgres, Neon, Supabase, Railway Postgres, or another database.
+
 ## Backend Environment
 
 Copy `backend/.env.example` to `backend/.env` and set real values before deployment.
