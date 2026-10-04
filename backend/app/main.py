@@ -58,18 +58,22 @@ DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("database_url", "")
 
 
 def get_db_conn():
-    if not DATABASE_URL:
+    db_url = os.getenv("DATABASE_URL") or os.getenv("database_url", "")
+    if not db_url:
         return None
     try:
         import psycopg2
-        url = DATABASE_URL
+        url = db_url
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
+        if "sslmode" not in url:
+            url += ("&" if "?" in url else "?") + "sslmode=require"
         conn = psycopg2.connect(url, connect_timeout=5)
         return conn
     except Exception as exc:
         print(f"Warning: Cloud Database connection error: {exc}")
         return None
+
 
 
 def init_db_tables():
@@ -875,6 +879,49 @@ def deactivate_room(hotel_id: str, room_number: str):
     if not ok:
         raise HTTPException(404, "Room not found")
     return {"deactivated": room_number}
+
+
+@app.get("/api/admin/db-test")
+def db_test(x_api_key: Optional[str] = Header(None)):
+    require_admin(x_api_key)
+    db_url = os.getenv("DATABASE_URL") or os.getenv("database_url", "")
+    if not db_url:
+        return {
+            "ok": False,
+            "error": "No DATABASE_URL or database_url environment variable found in Vercel."
+        }
+
+    safe_url = db_url
+    if "@" in safe_url:
+        prefix, host = safe_url.split("@", 1)
+        safe_url = prefix.split(":")[0] + ":****@" + host
+
+    try:
+        import psycopg2
+        url = db_url
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        if "sslmode" not in url:
+            url += ("&" if "?" in url else "?") + "sslmode=require"
+
+        conn = psycopg2.connect(url, connect_timeout=8)
+        with conn.cursor() as cur:
+            cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public';")
+            tables = [r[0] for r in cur.fetchall()]
+        conn.close()
+        return {
+            "ok": True,
+            "message": "Successfully connected to Supabase PostgreSQL Database!",
+            "database_url_found": safe_url,
+            "existing_tables": tables
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "database_url_found": safe_url,
+            "error": str(exc)
+        }
+
 
 
 async def forward_request(request_id: int):
