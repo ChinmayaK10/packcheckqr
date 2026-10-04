@@ -1,3 +1,5 @@
-from demo_main_backend import Handler
+from demo_main_backend import Handler as DemoHandler
 
-handler = Handler
+
+class handler(DemoHandler):
+    pass
