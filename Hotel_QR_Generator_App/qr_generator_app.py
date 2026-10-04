@@ -6,12 +6,19 @@ import queue
 import secrets
 import threading
 import tkinter as tk
+import sys
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from generate_qr import build_pdf, make_label, register, room_number, slugify
 
 APP_TITLE = "Hotel QR Generator"
+
+
+def get_default_out_dir() -> Path:
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent / "qr_codes"
+    return Path.cwd() / "qr_codes"
 
 
 class QRGeneratorApp(tk.Tk):
@@ -30,7 +37,7 @@ class QRGeneratorApp(tk.Tk):
         self.base_url = tk.StringVar(value="https://packcheckqrbg.vercel.app")
         self.api_url = tk.StringVar(value="https://packcheckqrbg.vercel.app")
         self.admin_key = tk.StringVar(value="admin-secret")
-        self.out_dir = tk.StringVar(value=str(Path(__file__).parent / "qr_codes"))
+        self.out_dir = tk.StringVar(value=str(get_default_out_dir()))
         self.make_pdf = tk.BooleanVar(value=True)
         self.do_register = tk.BooleanVar(value=True)
 
@@ -126,7 +133,10 @@ class QRGeneratorApp(tk.Tk):
 
     def _generate(self, config):
         try:
-            out_dir = config["out_dir"] / config["hotel_id"]
+            import re
+            safe_name = re.sub(r'[\\/:*?"<>|]', '_', config["hotel_name"]).strip()
+            folder_name = safe_name if safe_name else config["hotel_id"]
+            out_dir = config["out_dir"] / folder_name
             rooms, labels = [], []
             for floor in range(config["start_floor"], config["start_floor"] + config["floors"]):
                 floor_dir = out_dir / f"floor_{floor:02d}"

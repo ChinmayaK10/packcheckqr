@@ -133,7 +133,10 @@ def main():
     if floors < 1 or per_floor < 1 or per_floor > 99:
         sys.exit("Floors must be at least 1 and rooms per floor between 1 and 99.")
 
-    out_dir = Path(args.out) / hotel_id
+    import re
+    safe_name = re.sub(r'[\\/:*?"<>|]', '_', hotel_name).strip()
+    folder_name = safe_name if safe_name else hotel_id
+    out_dir = Path(args.out) / folder_name
     rooms, labels = [], []
     for floor in range(args.start_floor, args.start_floor + floors):
         floor_dir = out_dir / f"floor_{floor:02d}"
