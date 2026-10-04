@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room service</title>
+<style>
+:root{--bg:#f5f7f6;--surface:#fff;--ink:#17211f;--muted:#65736f;--line:#d6dedb;--pine:#123a34;--gold:#a47e2f;--err:#9b2c2c;--ok:#1f6f52}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:linear-gradient(180deg,#eef3f1 0,#f8faf9 48%,#f3f5f4 100%);color:var(--ink);font:400 16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{width:min(100%,520px);margin:0 auto;padding:24px 18px 40px}
+.top{padding:14px 0 22px}.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);font-weight:800}
+h1{font-size:34px;line-height:1.05;margin:4px 0 8px;color:var(--pine)}h2{font-size:24px;line-height:1.15;margin:0 0 8px;color:var(--pine)}p{margin:0 0 14px;color:var(--muted)}
+.panel{background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:8px;padding:20px;box-shadow:0 18px 45px rgba(18,58,52,.08)}
+label{display:block;font-weight:700;margin:0 0 8px}input,textarea{width:100%;font:inherit;color:var(--ink);background:#fbfcfc;border:1px solid var(--line);border-radius:6px;padding:12px}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}.room-input{font-size:40px;text-align:center;font-weight:800;letter-spacing:.12em;color:var(--pine);padding:12px 8px}
+textarea{min-height:128px;resize:vertical}button{font:700 15px system-ui,-apple-system,Segoe UI,sans-serif;border-radius:6px;cursor:pointer;min-height:48px;padding:0 18px;border:1px solid transparent}
+.primary{background:var(--pine);color:#fff;width:100%;margin-top:14px}.primary:disabled{opacity:.6;cursor:wait}.ghost{background:transparent;color:var(--pine);border-color:transparent;padding:0;min-height:34px}
+.mic{background:#fff;color:var(--pine);border-color:var(--pine);width:100%;margin-top:10px}.mic[aria-pressed=true]{background:var(--pine);color:#fff}
+.menu{display:grid;gap:10px}.service{width:100%;text-align:left;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:3px;min-height:auto}
+.service strong{font-size:17px}.service span{color:var(--muted);font-weight:500}.service:hover{border-color:var(--gold)}.err{color:var(--err);min-height:24px;margin:8px 0 0}
+.done{border-left:4px solid var(--ok);padding-left:14px}.done strong{display:block;font-size:19px;color:var(--pine)}.history{margin-top:18px}
+.req{border-top:1px solid var(--line);padding:12px 0;display:flex;justify-content:space-between;gap:14px}.req small{color:var(--muted);display:block}.status{font-weight:800;color:var(--pine);white-space:nowrap}
+[hidden]{display:none!important}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:420px){main{padding:18px 12px 32px}.panel{padding:16px}h1{font-size:30px}.room-input{font-size:34px}}
+</style>
+</head>
+<body>
+<main>
+  <header class="top"><div class="eyebrow">Guest requests</div><h1 id="hotel">Welcome</h1><p>Fast service from your room to the front desk.</p></header>
+  <section id="invalid" class="panel" hidden><h2>QR not active</h2><p>This QR code is not active. Please call reception and we will help you.</p></section>
+  <section id="s-room" class="panel" hidden><h2>Confirm your room</h2><p>Enter the room number printed on your door or key card.</p><label for="room" class="sr">Room number</label><input id="room" class="room-input" autocomplete="off" autocapitalize="characters" maxlength="10" aria-describedby="room-err"><p id="room-err" class="err" role="alert"></p><button id="room-go" class="primary">Continue</button></section>
+  <section id="s-menu" class="panel" hidden><h2>How can we help?</h2><div class="menu"><button class="service" data-svc="checkout"><strong>Check out</strong><span>Share your departure time</span></button><button class="service" data-svc="cart"><strong>Luggage cart</strong><span>Ask for a cart at your door</span></button><button class="service" data-svc="room_service"><strong>Room service and other requests</strong><span>Food, towels, amenities, or anything else</span></button></div></section>
+  <section id="s-form" class="panel" hidden><button id="back" class="ghost">Back</button><h2 id="f-title"></h2><div id="f-time-wrap" style="margin-bottom:14px"><label for="f-time" id="f-time-label"></label><input id="f-time" type="time"></div><label for="f-msg" id="f-msg-label">Details</label><textarea id="f-msg"></textarea><button id="mic" class="mic" aria-pressed="false" hidden>Speak request</button><p id="f-err" class="err" role="alert"></p><button id="send" class="primary">Send request</button></section>
+  <section id="s-done" class="panel" hidden><div class="done" role="status"><strong id="done-title"></strong><span id="done-note"></span></div><button id="again" class="primary">Make another request</button></section>
+  <section id="s-mine" class="panel history" hidden><h2>Your requests</h2><div id="mine"></div></section>
+</main>
+<script>
+const token=location.pathname.split("/").filter(Boolean).pop();let session=null;const $=id=>document.getElementById(id);
+const show=(...ids)=>["s-room","s-menu","s-form","s-done","s-mine","invalid"].forEach(i=>$(i).hidden=!ids.includes(i));
+const SERVICES={checkout:{title:"Check out",time:"Departure time",ph:"Anything we should know, such as help with luggage",required:false},cart:{title:"Luggage cart",time:"Cart needed at",ph:"Optional note for our team",required:false},room_service:{title:"Room service and other requests",time:null,ph:"What would you like? You can type or speak.",required:true}};
+const LABELS={new:"Received",in_progress:"In progress",done:"Completed",cancelled:"Cancelled"};const TYPES={checkout:"Check out",cart:"Luggage cart",room_service:"Room service"};let current=null;
+async function api(path,opts={}){const headers={"Content-Type":"application/json"};if(session)headers["X-Session"]=session;const res=await fetch(path,{...opts,headers});const data=await res.json().catch(()=>({}));if(res.status===401&&session){session=null;show("s-room");$("room-err").textContent=data.detail||"Please confirm your room number again."}if(!res.ok)throw new Error(data.detail||"Something went wrong. Please try again.");return data}
+async function init(){try{const info=await api("/api/room/"+encodeURIComponent(token));$("hotel").textContent=info.hotel_name;document.title=info.hotel_name+" room service";show("s-room");$("room").focus()}catch{show("invalid")}}
+$("room-go").onclick=async()=>{const value=$("room").value.trim();$("room-err").textContent="";if(!value){$("room-err").textContent="Enter your room number.";return}$("room-go").disabled=true;try{const res=await api("/api/verify",{method:"POST",body:JSON.stringify({token,room_number:value})});session=res.session;show("s-menu","s-mine");loadMine()}catch(e){$("room-err").textContent=e.message}$("room-go").disabled=false};
+$("room").addEventListener("keydown",e=>{if(e.key==="Enter")$("room-go").click()});
+document.querySelectorAll("[data-svc]").forEach(b=>b.onclick=()=>{current=b.dataset.svc;const s=SERVICES[current];$("f-title").textContent=s.title;$("f-time-wrap").hidden=!s.time;$("f-time-label").textContent=s.time||"";$("f-time").value="";$("f-msg").value="";$("f-msg").placeholder=s.ph;$("f-msg-label").textContent=s.required?"What do you need?":"Notes";$("f-err").textContent="";show("s-form")});
+$("back").onclick=()=>{stopMic();show("s-menu","s-mine")};$("again").onclick=()=>show("s-menu","s-mine");
+$("send").onclick=async()=>{stopMic();const s=SERVICES[current];const message=$("f-msg").value.trim();if(s.required&&message.length<2){$("f-err").textContent="Please tell us what you need.";return}$("send").disabled=true;try{const res=await api("/api/requests",{method:"POST",body:JSON.stringify({type:current,message,preferred_time:s.time?$("f-time").value:""})});$("done-title").textContent="Request received";$("done-note").textContent="Reference "+res.id+". Our team has been notified.";show("s-done","s-mine");loadMine()}catch(e){$("f-err").textContent=e.message}$("send").disabled=false};
+async function loadMine(){if(!session)return;try{const list=await api("/api/requests/mine");$("mine").innerHTML="";list.forEach(r=>{const row=document.createElement("div");row.className="req";const left=document.createElement("div");const name=document.createElement("strong");name.textContent=TYPES[r.type]||r.type;left.append(name);if(r.message){const m=document.createElement("small");m.textContent=r.message;left.append(m)}const st=document.createElement("div");st.className="status";st.textContent=LABELS[r.status]||r.status;row.append(left,st);$("mine").append(row)});if(!list.length)$("mine").textContent="Nothing yet."}catch{}}
+setInterval(loadMine,10000);
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,listening=false;function stopMic(){if(rec&&listening)rec.stop()}
+if(SR){$("mic").hidden=false;$("mic").onclick=()=>{if(listening){rec.stop();return}rec=new SR();rec.lang=navigator.language||"en-US";rec.interimResults=true;const base=$("f-msg").value.trim();rec.onresult=e=>{let text="";for(const r of e.results)text+=r[0].transcript;$("f-msg").value=(base?base+" ":"")+text};rec.onend=()=>{listening=false;$("mic").textContent="Speak request";$("mic").setAttribute("aria-pressed","false")};rec.onerror=()=>{$("f-err").textContent="Microphone unavailable. You can type your request instead."};rec.start();listening=true;$("mic").textContent="Listening. Tap to stop";$("mic").setAttribute("aria-pressed","true")}}
+init();
+</script>
+</body>
+</html>

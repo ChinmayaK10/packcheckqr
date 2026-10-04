@@ -1,0 +1,17 @@
+.env
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Generated QR manifests contain room tokens and should be private.
+qr_generator/qr_codes/
+
+# Local logs and build artifacts.
+*.log
+dist/
+build/
