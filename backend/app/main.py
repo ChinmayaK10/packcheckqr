@@ -54,7 +54,7 @@ ROOMS_FILE_PATHS = [
 ]
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("database_url", "")
 
 
 def get_db_conn():
