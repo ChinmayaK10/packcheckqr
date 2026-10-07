@@ -1,57 +1,363 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Room service</title>
-<style>
-:root{--bg:#f5f7f6;--surface:#fff;--ink:#17211f;--muted:#65736f;--line:#d6dedb;--pine:#123a34;--gold:#a47e2f;--err:#9b2c2c;--ok:#1f6f52}
-*{box-sizing:border-box}
-body{margin:0;min-height:100vh;background:linear-gradient(180deg,#eef3f1 0,#f8faf9 48%,#f3f5f4 100%);color:var(--ink);font:400 16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-main{width:min(100%,520px);margin:0 auto;padding:24px 18px 40px}
-.top{padding:14px 0 22px}.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);font-weight:800}
-h1{font-size:34px;line-height:1.05;margin:4px 0 8px;color:var(--pine)}h2{font-size:24px;line-height:1.15;margin:0 0 8px;color:var(--pine)}p{margin:0 0 14px;color:var(--muted)}
-.panel{background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:8px;padding:20px;box-shadow:0 18px 45px rgba(18,58,52,.08)}
-label{display:block;font-weight:700;margin:0 0 8px}input,textarea{width:100%;font:inherit;color:var(--ink);background:#fbfcfc;border:1px solid var(--line);border-radius:6px;padding:12px}
-input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}.room-input{font-size:40px;text-align:center;font-weight:800;letter-spacing:.12em;color:var(--pine);padding:12px 8px}
-textarea{min-height:128px;resize:vertical}button{font:700 15px system-ui,-apple-system,Segoe UI,sans-serif;border-radius:6px;cursor:pointer;min-height:48px;padding:0 18px;border:1px solid transparent}
-.primary{background:var(--pine);color:#fff;width:100%;margin-top:14px}.primary:disabled{opacity:.6;cursor:wait}.ghost{background:transparent;color:var(--pine);border-color:transparent;padding:0;min-height:34px}
-.mic{background:#fff;color:var(--pine);border-color:var(--pine);width:100%;margin-top:10px}.mic[aria-pressed=true]{background:var(--pine);color:#fff}
-.menu{display:grid;gap:10px}.service{width:100%;text-align:left;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:3px;min-height:auto}
-.service strong{font-size:17px}.service span{color:var(--muted);font-weight:500}.service:hover{border-color:var(--gold)}.err{color:var(--err);min-height:24px;margin:8px 0 0}
-.done{border-left:4px solid var(--ok);padding-left:14px}.done strong{display:block;font-size:19px;color:var(--pine)}.history{margin-top:18px}
-.req{border-top:1px solid var(--line);padding:12px 0;display:flex;justify-content:space-between;gap:14px}.req small{color:var(--muted);display:block}.status{font-weight:800;color:var(--pine);white-space:nowrap}
-[hidden]{display:none!important}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-@media(max-width:420px){main{padding:18px 12px 32px}.panel{padding:16px}h1{font-size:30px}.room-input{font-size:34px}}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="PackCheck Guest Checkout — Complete your hotel checkout in one seamless step." />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>PackCheck — Guest Checkout</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-<main>
-  <header class="top"><div class="eyebrow">Guest requests</div><h1 id="hotel">Welcome</h1><p>Fast service from your room to the front desk.</p></header>
-  <section id="invalid" class="panel" hidden><h2>QR not active</h2><p>This QR code is not active. Please call reception and we will help you.</p></section>
-  <section id="s-room" class="panel" hidden><h2>Confirm your room</h2><p>Enter the room number printed on your door or key card.</p><label for="room" class="sr">Room number</label><input id="room" class="room-input" autocomplete="off" autocapitalize="characters" maxlength="10" aria-describedby="room-err"><p id="room-err" class="err" role="alert"></p><button id="room-go" class="primary">Continue</button></section>
-  <section id="s-menu" class="panel" hidden><h2>How can we help?</h2><div class="menu"><button class="service" data-svc="checkout"><strong>Check out</strong><span>Share your departure time</span></button><button class="service" data-svc="cart"><strong>Luggage cart</strong><span>Ask for a cart at your door</span></button><button class="service" data-svc="room_service"><strong>Room service and other requests</strong><span>Food, towels, amenities, or anything else</span></button></div></section>
-  <section id="s-form" class="panel" hidden><button id="back" class="ghost">Back</button><h2 id="f-title"></h2><div id="f-time-wrap" style="margin-bottom:14px"><label for="f-time" id="f-time-label"></label><input id="f-time" type="time"></div><label for="f-msg" id="f-msg-label">Details</label><textarea id="f-msg"></textarea><button id="mic" class="mic" aria-pressed="false" hidden>Speak request</button><p id="f-err" class="err" role="alert"></p><button id="send" class="primary">Send request</button></section>
-  <section id="s-done" class="panel" hidden><div class="done" role="status"><strong id="done-title"></strong><span id="done-note"></span></div><button id="again" class="primary">Make another request</button></section>
-  <section id="s-mine" class="panel history" hidden><h2>Your requests</h2><div id="mine"></div></section>
-</main>
-<script>
-const token=location.pathname.split("/").filter(Boolean).pop();let session=null;const $=id=>document.getElementById(id);
-const show=(...ids)=>["s-room","s-menu","s-form","s-done","s-mine","invalid"].forEach(i=>$(i).hidden=!ids.includes(i));
-const SERVICES={checkout:{title:"Check out",time:"Departure time",ph:"Anything we should know, such as help with luggage",required:false},cart:{title:"Luggage cart",time:"Cart needed at",ph:"Optional note for our team",required:false},room_service:{title:"Room service and other requests",time:null,ph:"What would you like? You can type or speak.",required:true}};
-const LABELS={new:"Received",in_progress:"In progress",done:"Completed",cancelled:"Cancelled"};const TYPES={checkout:"Check out",cart:"Luggage cart",room_service:"Room service"};let current=null;
-async function api(path,opts={}){const headers={"Content-Type":"application/json"};if(session)headers["X-Session"]=session;const res=await fetch(path,{...opts,headers});const data=await res.json().catch(()=>({}));if(res.status===401&&session){session=null;show("s-room");$("room-err").textContent=data.detail||"Please confirm your room number again."}if(!res.ok)throw new Error(data.detail||"Something went wrong. Please try again.");return data}
-async function init(){try{const info=await api("/api/room/"+encodeURIComponent(token));$("hotel").textContent=info.hotel_name;document.title=info.hotel_name+" room service";show("s-room");$("room").focus()}catch{show("invalid")}}
-$("room-go").onclick=async()=>{const value=$("room").value.trim();$("room-err").textContent="";if(!value){$("room-err").textContent="Enter your room number.";return}$("room-go").disabled=true;try{const res=await api("/api/verify",{method:"POST",body:JSON.stringify({token,room_number:value})});session=res.session;show("s-menu","s-mine");loadMine()}catch(e){$("room-err").textContent=e.message}$("room-go").disabled=false};
-$("room").addEventListener("keydown",e=>{if(e.key==="Enter")$("room-go").click()});
-document.querySelectorAll("[data-svc]").forEach(b=>b.onclick=()=>{current=b.dataset.svc;const s=SERVICES[current];$("f-title").textContent=s.title;$("f-time-wrap").hidden=!s.time;$("f-time-label").textContent=s.time||"";$("f-time").value="";$("f-msg").value="";$("f-msg").placeholder=s.ph;$("f-msg-label").textContent=s.required?"What do you need?":"Notes";$("f-err").textContent="";show("s-form")});
-$("back").onclick=()=>{stopMic();show("s-menu","s-mine")};$("again").onclick=()=>show("s-menu","s-mine");
-$("send").onclick=async()=>{stopMic();const s=SERVICES[current];const message=$("f-msg").value.trim();if(s.required&&message.length<2){$("f-err").textContent="Please tell us what you need.";return}$("send").disabled=true;try{const res=await api("/api/requests",{method:"POST",body:JSON.stringify({type:current,message,preferred_time:s.time?$("f-time").value:""})});$("done-title").textContent="Request received";$("done-note").textContent="Reference "+res.id+". Our team has been notified.";show("s-done","s-mine");loadMine()}catch(e){$("f-err").textContent=e.message}$("send").disabled=false};
-async function loadMine(){if(!session)return;try{const list=await api("/api/requests/mine");$("mine").innerHTML="";list.forEach(r=>{const row=document.createElement("div");row.className="req";const left=document.createElement("div");const name=document.createElement("strong");name.textContent=TYPES[r.type]||r.type;left.append(name);if(r.message){const m=document.createElement("small");m.textContent=r.message;left.append(m)}const st=document.createElement("div");st.className="status";st.textContent=LABELS[r.status]||r.status;row.append(left,st);$("mine").append(row)});if(!list.length)$("mine").textContent="Nothing yet."}catch{}}
-setInterval(loadMine,10000);
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,listening=false;function stopMic(){if(rec&&listening)rec.stop()}
-if(SR){$("mic").hidden=false;$("mic").onclick=()=>{if(listening){rec.stop();return}rec=new SR();rec.lang=navigator.language||"en-US";rec.interimResults=true;const base=$("f-msg").value.trim();rec.onresult=e=>{let text="";for(const r of e.results)text+=r[0].transcript;$("f-msg").value=(base?base+" ":"")+text};rec.onend=()=>{listening=false;$("mic").textContent="Speak request";$("mic").setAttribute("aria-pressed","false")};rec.onerror=()=>{$("f-err").textContent="Microphone unavailable. You can type your request instead."};rec.start();listening=true;$("mic").textContent="Listening. Tap to stop";$("mic").setAttribute("aria-pressed","true")}}
-init();
-</script>
+  <div id="app" class="app-root">
+
+    <!-- Thin progress line at very top -->
+    <div class="progress-track" id="progressTrack" aria-hidden="true">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <!-- Screens -->
+    <main class="screens-wrap" id="screensWrap">
+
+      <!-- ══════════════════════════════════════════════════════ -->
+      <!-- SCREEN 0: ROOM & FLOOR ENTRY                          -->
+      <!-- ══════════════════════════════════════════════════════ -->
+      <section class="screen active" id="s0" aria-labelledby="s0-title">
+        <div class="screen-inner">
+
+          <div class="screen-logo" aria-label="PackCheck">
+            <img src="/static/logo.webp" alt="PackCheck" class="logo-img" />
+          </div>
+
+          <div class="screen-head">
+            <p class="eyebrow">WELCOME</p>
+            <h1 class="screen-title" id="s0-title">Let's get you checked out</h1>
+            <p class="screen-subtitle">Enter your room details to begin.</p>
+          </div>
+
+          <div class="input-group-stack">
+            <div class="input-field-wrap">
+              <label class="input-label" for="inp-room">Room Number</label>
+              <div class="input-box">
+                <span class="input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
+                  </svg>
+                </span>
+                <input type="text" id="inp-room" class="input-field"
+                  placeholder="e.g. 407" inputmode="numeric" pattern="[0-9]*"
+                  maxlength="6" autocomplete="off" aria-required="true" />
+              </div>
+            </div>
+
+            <div class="input-field-wrap">
+              <label class="input-label" for="inp-floor">Floor Number</label>
+              <div class="input-box">
+                <span class="input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 21h18M4 21V7l8-4 8 4v14"/><path d="M9 21V12h6v9"/>
+                  </svg>
+                </span>
+                <input type="text" id="inp-floor" class="input-field"
+                  placeholder="e.g. 4" inputmode="numeric" pattern="[0-9]*"
+                  maxlength="4" autocomplete="off" aria-required="true" />
+              </div>
+            </div>
+
+            <p class="input-error hidden" id="s0-error" role="alert">
+              Please enter valid room and floor numbers.
+            </p>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-s0-next">
+              Begin Checkout
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════ -->
+      <!-- SCREEN 1: SERVICE SELECTION                           -->
+      <!-- ══════════════════════════════════════════════════════ -->
+      <section class="screen" id="s1" aria-labelledby="s1-title">
+        <div class="screen-inner">
+
+          <div class="screen-logo" aria-label="PackCheck">
+            <img src="/static/logo.webp" alt="PackCheck" class="logo-img" />
+          </div>
+
+          <div class="screen-head">
+            <p class="eyebrow">CHECKOUT REQUEST</p>
+            <h1 class="screen-title" id="s1-title">What do you need?</h1>
+          </div>
+
+          <div class="option-group" role="radiogroup" aria-labelledby="s1-title">
+            <label class="option-card" for="opt-luggage">
+              <input type="radio" name="service" id="opt-luggage" value="CHECKOUT_LUGGAGE_PICKUP" class="opt-radio" />
+              <div class="option-card-body">
+                <div class="option-card-left">
+                  <span class="opt-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4V2h6v2"/>
+                      <line x1="12" y1="10" x2="12" y2="14"/><line x1="10" y1="12" x2="14" y2="12"/>
+                    </svg>
+                  </span>
+                  <div>
+                    <span class="opt-name">Checkout &amp; Luggage Pickup</span>
+                    <span class="opt-desc">Our team will collect your luggage</span>
+                  </div>
+                </div>
+                <span class="opt-selector" aria-hidden="true"></span>
+              </div>
+            </label>
+
+            <label class="option-card" for="opt-checkout">
+              <input type="radio" name="service" id="opt-checkout" value="CHECKOUT_ONLY" class="opt-radio" />
+              <div class="option-card-body">
+                <div class="option-card-left">
+                  <span class="opt-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M9 12l2 2 4-4"/>
+                      <path d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9a12.02 12.02 0 00-.382-3.016z"/>
+                    </svg>
+                  </span>
+                  <div>
+                    <span class="opt-name">Checkout Only</span>
+                    <span class="opt-desc">Proceed without luggage assistance</span>
+                  </div>
+                </div>
+                <span class="opt-selector" aria-hidden="true"></span>
+              </div>
+            </label>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-s1-next" disabled>
+              Continue
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <button class="btn btn-ghost" id="btn-s1-back">
+              <svg class="btn-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+              Back
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════ -->
+      <!-- SCREEN 2: MINIBAR DECLARATION                         -->
+      <!-- ══════════════════════════════════════════════════════ -->
+      <section class="screen" id="s2" aria-labelledby="s2-title">
+        <div class="screen-inner">
+
+          <div class="screen-logo" aria-label="PackCheck">
+            <img src="/static/logo.webp" alt="PackCheck" class="logo-img" />
+          </div>
+
+          <div class="screen-head">
+            <p class="eyebrow">MINIBAR</p>
+            <h1 class="screen-title" id="s2-title">Have you used anything from the minibar?</h1>
+          </div>
+
+          <div class="option-group" role="radiogroup" aria-labelledby="s2-title">
+            <label class="option-card" for="opt-minibar-yes">
+              <input type="radio" name="minibar" id="opt-minibar-yes" value="USED" class="opt-radio" />
+              <div class="option-card-body">
+                <div class="option-card-left">
+                  <span class="opt-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M8 3H6l-1 6h14l-1-6h-2"/><path d="M6 9v12h12V9"/><path d="M9 14h6"/>
+                    </svg>
+                  </span>
+                  <div>
+                    <span class="opt-name">Yes, I used something</span>
+                    <span class="opt-desc">Minibar usage will be noted</span>
+                  </div>
+                </div>
+                <span class="opt-selector" aria-hidden="true"></span>
+              </div>
+            </label>
+
+            <label class="option-card" for="opt-minibar-no">
+              <input type="radio" name="minibar" id="opt-minibar-no" value="NOT_USED" class="opt-radio" />
+              <div class="option-card-body">
+                <div class="option-card-left">
+                  <span class="opt-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>
+                    </svg>
+                  </span>
+                  <div>
+                    <span class="opt-name">No, I did not use the minibar</span>
+                  </div>
+                </div>
+                <span class="opt-selector" aria-hidden="true"></span>
+              </div>
+            </label>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-s2-next" disabled>
+              Continue
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <button class="btn btn-ghost" id="btn-s2-back">
+              <svg class="btn-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+              Back
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════ -->
+      <!-- SCREEN 3: REVIEW & CONFIRM                            -->
+      <!-- ══════════════════════════════════════════════════════ -->
+      <section class="screen" id="s3" aria-labelledby="s3-title">
+        <div class="screen-inner">
+
+          <div class="screen-logo" aria-label="PackCheck">
+            <img src="/static/logo.webp" alt="PackCheck" class="logo-img" />
+          </div>
+
+          <div class="screen-head">
+            <p class="eyebrow">REVIEW</p>
+            <h1 class="screen-title" id="s3-title">Confirm your checkout</h1>
+          </div>
+
+          <div class="review-card">
+            <div class="review-row">
+              <span class="review-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
+                </svg>
+                Room
+              </span>
+              <span class="review-value" id="rv-room">—</span>
+            </div>
+            <div class="review-sep"></div>
+            <div class="review-row">
+              <span class="review-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 21h18M4 21V7l8-4 8 4v14"/><path d="M9 21V12h6v9"/>
+                </svg>
+                Floor
+              </span>
+              <span class="review-value" id="rv-floor">—</span>
+            </div>
+            <div class="review-sep"></div>
+            <div class="review-row">
+              <span class="review-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 12l2 2 4-4"/><path d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622C17.176 19.29 21 14.591 21 9a12.02 12.02 0 00-.382-3.016z"/>
+                </svg>
+                Service
+              </span>
+              <span class="review-value" id="rv-service">—</span>
+            </div>
+            <div class="review-sep"></div>
+            <div class="review-row">
+              <span class="review-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M8 3H6l-1 6h14l-1-6h-2"/><path d="M6 9v12h12V9"/>
+                </svg>
+                Minibar
+              </span>
+              <span class="review-value" id="rv-minibar">Not used</span>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-s3-confirm">
+              Confirm Checkout
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <button class="btn btn-ghost" id="btn-s3-edit">
+              <svg class="btn-icon-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Edit
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════ -->
+      <!-- SCREEN 4: REQUEST SENT                                -->
+      <!-- ══════════════════════════════════════════════════════ -->
+      <section class="screen" id="s4" aria-labelledby="s4-title">
+        <div class="screen-inner screen-centered">
+
+          <div class="screen-logo screen-logo--success" aria-label="PackCheck">
+            <img src="/static/logo.webp" alt="PackCheck" class="logo-img" />
+          </div>
+
+          <div class="success-anim" id="successAnim" aria-hidden="true">
+            <svg class="ring-svg" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle class="ring-track" cx="60" cy="60" r="54"/>
+              <circle class="ring-fill" cx="60" cy="60" r="54" stroke-dasharray="339.29" stroke-dashoffset="339.29" stroke-linecap="round"/>
+            </svg>
+            <svg class="check-svg" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path class="check-path" d="M15 31L26 42L45 20" stroke-linecap="round" stroke-linejoin="round" pathLength="100"/>
+            </svg>
+          </div>
+
+          <div class="success-text" id="successText">
+            <h1 class="success-title" id="s4-title">Request Sent</h1>
+            <p class="success-sub">Our team has received your checkout request.<br>We will be with you shortly.</p>
+          </div>
+
+          <div class="success-meta" id="successMeta">
+            <div class="meta-item">
+              <span class="meta-label">ROOM</span>
+              <span class="meta-val" id="sm-room">—</span>
+            </div>
+            <div class="meta-sep"></div>
+            <div class="meta-item">
+              <span class="meta-label">FLOOR</span>
+              <span class="meta-val" id="sm-floor">—</span>
+            </div>
+            <div class="meta-sep"></div>
+            <div class="meta-item">
+              <span class="meta-label">CONFIRMED</span>
+              <span class="meta-val" id="sm-time">—</span>
+            </div>
+          </div>
+
+          <button class="btn btn-ghost btn-restart" id="btn-restart">Start over</button>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer: reset hint (hidden on first & last screen) -->
+    <div class="footer-hint" id="footerHint">
+      <button class="reset-btn" id="resetBtn">RESET</button>
+    </div>
+
+  </div>
+  <script src="/static/app.js"></script>
 </body>
 </html>

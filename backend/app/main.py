@@ -12,7 +12,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel, Field
 
@@ -678,6 +678,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Serve static frontend assets (works on both local and Vercel) ──
+_MIME = {
+    ".css":  "text/css; charset=utf-8",
+    ".js":   "application/javascript; charset=utf-8",
+    ".webp": "image/webp",
+    ".png":  "image/png",
+    ".ico":  "image/x-icon",
+}
+
+
+def _read_static_bytes(filename: str) -> bytes:
+    for base in [
+        STATIC,
+        Path.cwd() / "backend" / "app" / "static",
+        Path.cwd() / "app" / "static",
+    ]:
+        p = base / filename
+        if p.is_file():
+            return p.read_bytes()
+    raise HTTPException(404, f"Static asset '{filename}' not found.")
+
+
+@app.get("/static/{filename:path}")
+def static_file(filename: str):
+    data = _read_static_bytes(filename)
+    suffix = Path(filename).suffix.lower()
+    mime = _MIME.get(suffix, "application/octet-stream")
+    return Response(content=data, media_type=mime)
 
 
 
