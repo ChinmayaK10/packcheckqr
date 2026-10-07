@@ -332,7 +332,7 @@ async function submitRequest() {
     
     if (state.serviceType === 'ROOM_SERVICE') {
       reqType = 'room_service';
-      message = `Request: ${state.message}`;
+      message = state.message;
     } else {
       const serviceLine = state.serviceType === 'CHECKOUT_LUGGAGE_PICKUP'
         ? 'Checkout & Luggage Pickup'
