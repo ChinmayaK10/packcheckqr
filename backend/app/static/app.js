@@ -14,8 +14,9 @@ const INITIAL_STATE = () => ({
   qrToken:       '',     // token from QR URL path
   session:       null,   // signed session from /api/verify
   hotelName:     '',     // from /api/room/{token}
-  serviceType:   null,   // 'CHECKOUT_LUGGAGE_PICKUP' | 'CHECKOUT_ONLY'
+  serviceType:   null,   // 'CHECKOUT_LUGGAGE_PICKUP' | 'CHECKOUT_ONLY' | 'ROOM_SERVICE'
   minibarUsed:   null,   // 'USED' | 'NOT_USED'
+  message:       '',     // for room service
   requestStatus: 'DRAFT',
   timestamp:     null,
   currentScreen: 0,
@@ -50,6 +51,14 @@ const dom = {
   s2:         el('s2'),
   btnS2Next:  el('btn-s2-next'),
   btnS2Back:  el('btn-s2-back'),
+  s2Eyebrow:  el('s2-eyebrow'),
+  s2Title:    el('s2-title'),
+  s2MinibarGrp: el('s2-minibar-group'),
+  s2MessageGrp: el('s2-message-group'),
+  inpMessage: el('inp-message'),
+  btnMic:     el('btn-mic'),
+  micText:    el('mic-text'),
+  s2MsgError: el('s2-msg-error'),
 
   /* S3 — Review */
   s3:         el('s3'),
@@ -57,6 +66,9 @@ const dom = {
   rvFloor:    el('rv-floor'),
   rvService:  el('rv-service'),
   rvMinibar:  el('rv-minibar'),
+  rvMinibarRow: el('rv-minibar-row'),
+  rvMessage:  el('rv-message'),
+  rvMessageRow: el('rv-message-row'),
   btnS3Conf:  el('btn-s3-confirm'),
   btnS3Edit:  el('btn-s3-edit'),
 
@@ -188,7 +200,21 @@ function initS1() {
   }));
 
   dom.btnS1Next.addEventListener('click', () => {
-    if (state.serviceType) goToScreen(2);
+    if (!state.serviceType) return;
+    if (state.serviceType === 'ROOM_SERVICE') {
+      dom.s2Eyebrow.textContent = 'YOUR REQUEST';
+      dom.s2Title.textContent = 'What do you need?';
+      dom.s2MinibarGrp.style.display = 'none';
+      dom.s2MessageGrp.style.display = 'block';
+      dom.btnS2Next.disabled = false;
+    } else {
+      dom.s2Eyebrow.textContent = 'MINIBAR';
+      dom.s2Title.textContent = 'Have you used anything from the minibar?';
+      dom.s2MinibarGrp.style.display = '';
+      dom.s2MessageGrp.style.display = 'none';
+      dom.btnS2Next.disabled = !state.minibarUsed;
+    }
+    goToScreen(2);
   });
 
   dom.btnS1Back.addEventListener('click', () => goToScreen(0));
@@ -203,13 +229,65 @@ function initS2() {
     dom.btnS2Next.disabled = false;
   }));
 
+  dom.inpMessage.addEventListener('input', () => {
+    dom.s2MsgError.classList.add('hidden');
+    dom.inpMessage.classList.remove('input-field--error');
+  });
+
   dom.btnS2Next.addEventListener('click', () => {
-    if (!state.minibarUsed) return;
+    if (state.serviceType === 'ROOM_SERVICE') {
+      state.message = dom.inpMessage.value.trim();
+      if (state.message.length < 2) {
+        dom.s2MsgError.textContent = 'Please tell us what you need.';
+        dom.s2MsgError.classList.remove('hidden');
+        dom.inpMessage.classList.add('input-field--error');
+        return;
+      }
+    } else {
+      if (!state.minibarUsed) return;
+    }
     buildReview();
     goToScreen(3);
   });
 
   dom.btnS2Back.addEventListener('click', () => goToScreen(1));
+
+  // Voice recognition logic
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, listening = false;
+  if (SR) {
+    dom.btnMic.style.display = 'flex';
+    dom.btnMic.addEventListener('click', () => {
+      if (listening) {
+        if (rec) rec.stop();
+        return;
+      }
+      rec = new SR();
+      rec.lang = navigator.language || 'en-US';
+      rec.interimResults = true;
+      const base = dom.inpMessage.value.trim();
+      rec.onresult = e => {
+        let text = '';
+        for (const r of e.results) text += r[0].transcript;
+        dom.inpMessage.value = (base ? base + ' ' : '') + text;
+      };
+      rec.onend = () => {
+        listening = false;
+        dom.micText.textContent = 'Speak request';
+        dom.btnMic.classList.remove('active');
+      };
+      rec.onerror = () => {
+        dom.s2MsgError.textContent = 'Microphone unavailable. You can type your request instead.';
+        dom.s2MsgError.classList.remove('hidden');
+      };
+      rec.start();
+      listening = true;
+      dom.micText.textContent = 'Listening... tap to stop';
+      dom.btnMic.classList.add('active');
+      dom.s2MsgError.classList.add('hidden');
+      dom.inpMessage.classList.remove('input-field--error');
+    });
+  }
 }
 
 /* ─── S3: REVIEW & CONFIRM ────────────────────────────────── */
@@ -217,13 +295,21 @@ function buildReview() {
   dom.rvRoom.textContent  = state.room;
   dom.rvFloor.textContent = state.floor;
 
-  dom.rvService.textContent = state.serviceType === 'CHECKOUT_LUGGAGE_PICKUP'
-    ? 'Checkout & Luggage Pickup'
-    : 'Checkout Only';
-
-  dom.rvMinibar.textContent = state.minibarUsed === 'USED'
-    ? 'Used — will be verified'
-    : 'Not used';
+  if (state.serviceType === 'ROOM_SERVICE') {
+    dom.rvService.textContent = 'Room Service & Requests';
+    dom.rvMinibarRow.style.display = 'none';
+    dom.rvMessageRow.style.display = 'flex';
+    dom.rvMessage.textContent = state.message;
+  } else {
+    dom.rvService.textContent = state.serviceType === 'CHECKOUT_LUGGAGE_PICKUP'
+      ? 'Checkout & Luggage Pickup'
+      : 'Checkout Only';
+    dom.rvMinibarRow.style.display = 'flex';
+    dom.rvMessageRow.style.display = 'none';
+    dom.rvMinibar.textContent = state.minibarUsed === 'USED'
+      ? 'Used — will be verified'
+      : 'Not used';
+  }
 }
 
 function initS3() {
@@ -241,11 +327,19 @@ async function submitRequest() {
 
   try {
     // Compose a human-readable message for the staff queue
-    const serviceLine = state.serviceType === 'CHECKOUT_LUGGAGE_PICKUP'
-      ? 'Checkout & Luggage Pickup'
-      : 'Checkout Only';
-    const minibarLine = state.minibarUsed === 'USED' ? 'Yes (will be verified)' : 'No';
-    const message = `Service: ${serviceLine}\nFloor: ${state.floor}\nMinibar used: ${minibarLine}`;
+    let message = '';
+    let reqType = 'checkout';
+    
+    if (state.serviceType === 'ROOM_SERVICE') {
+      reqType = 'room_service';
+      message = `Request: ${state.message}`;
+    } else {
+      const serviceLine = state.serviceType === 'CHECKOUT_LUGGAGE_PICKUP'
+        ? 'Checkout & Luggage Pickup'
+        : 'Checkout Only';
+      const minibarLine = state.minibarUsed === 'USED' ? 'Yes (will be verified)' : 'No';
+      message = `Service: ${serviceLine}\nMinibar used: ${minibarLine}`;
+    }
 
     const res = await fetch('/api/requests', {
       method: 'POST',
@@ -254,7 +348,7 @@ async function submitRequest() {
         'X-Session': state.session
       },
       body: JSON.stringify({
-        type: 'checkout',
+        type: reqType,
         message: message,
         preferred_time: ''
       })
@@ -316,6 +410,7 @@ function resetApp() {
 
   if (dom.inpRoom)  { dom.inpRoom.value  = ''; dom.inpRoom.classList.remove('input-field--error'); }
   if (dom.inpFloor) { dom.inpFloor.value = ''; dom.inpFloor.classList.remove('input-field--error'); }
+  if (dom.inpMessage) { dom.inpMessage.value = ''; dom.inpMessage.classList.remove('input-field--error'); }
   dom.s0Error.classList.add('hidden');
 
   dom.btnS1Next.disabled = true;

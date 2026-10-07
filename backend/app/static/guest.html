@@ -137,6 +137,25 @@
                 <span class="opt-selector" aria-hidden="true"></span>
               </div>
             </label>
+
+            <label class="option-card" for="opt-roomservice">
+              <input type="radio" name="service" id="opt-roomservice" value="ROOM_SERVICE" class="opt-radio" />
+              <div class="option-card-body">
+                <div class="option-card-left">
+                  <span class="opt-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 18h18M4 18V6a2 2 0 012-2h12a2 2 0 012 2v12"/>
+                      <path d="M9 12h6"/>
+                    </svg>
+                  </span>
+                  <div>
+                    <span class="opt-name">Room Service &amp; Requests</span>
+                    <span class="opt-desc">Food, towels, amenities, or anything else</span>
+                  </div>
+                </div>
+                <span class="opt-selector" aria-hidden="true"></span>
+              </div>
+            </label>
           </div>
 
           <div class="actions">
@@ -168,11 +187,11 @@
           </div>
 
           <div class="screen-head">
-            <p class="eyebrow">MINIBAR</p>
+            <p class="eyebrow" id="s2-eyebrow">MINIBAR</p>
             <h1 class="screen-title" id="s2-title">Have you used anything from the minibar?</h1>
           </div>
 
-          <div class="option-group" role="radiogroup" aria-labelledby="s2-title">
+          <div class="option-group" role="radiogroup" aria-labelledby="s2-title" id="s2-minibar-group">
             <label class="option-card" for="opt-minibar-yes">
               <input type="radio" name="minibar" id="opt-minibar-yes" value="USED" class="opt-radio" />
               <div class="option-card-body">
@@ -207,6 +226,14 @@
                 <span class="opt-selector" aria-hidden="true"></span>
               </div>
             </label>
+          </div>
+
+          <div id="s2-message-group" style="display:none; width:100%;">
+            <textarea id="inp-message" class="input-field" style="min-height: 120px; resize: vertical; width: 100%; padding: 14px; font-family: inherit; margin-bottom: 10px;" placeholder="What do you need? You can type or speak."></textarea>
+            <button id="btn-mic" class="btn btn-ghost" style="width:100%; display:none; justify-content:center; align-items:center;">
+              <span id="mic-icon" style="margin-right:8px; font-size:18px;">🎙️</span> <span id="mic-text">Speak request</span>
+            </button>
+            <p class="input-error hidden" id="s2-msg-error" style="margin-top:8px; text-align:center;"></p>
           </div>
 
           <div class="actions">
@@ -273,7 +300,7 @@
               <span class="review-value" id="rv-service">—</span>
             </div>
             <div class="review-sep"></div>
-            <div class="review-row">
+            <div class="review-row" id="rv-minibar-row">
               <span class="review-label">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M8 3H6l-1 6h14l-1-6h-2"/><path d="M6 9v12h12V9"/>
@@ -281,6 +308,16 @@
                 Minibar
               </span>
               <span class="review-value" id="rv-minibar">Not used</span>
+            </div>
+
+            <div class="review-row" id="rv-message-row" style="display:none;">
+              <span class="review-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                </svg>
+                Request
+              </span>
+              <span class="review-value" id="rv-message" style="white-space: pre-wrap; word-break: break-word;">—</span>
             </div>
           </div>
 
