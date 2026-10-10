@@ -26,3 +26,7 @@ rooms.json
 taj/
 qr_codes/
 
+# Separate experimental / agent workspace directories — not part of this project
+packcheck-checkout/
+packcheckqr2/
+
