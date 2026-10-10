@@ -10,13 +10,12 @@
 ──────────────────────────────────────────────────────────── */
 const INITIAL_STATE = () => ({
   room:          '',
-  floor:         '',
   qrToken:       '',     // token from QR URL path
   session:       null,   // signed session from /api/verify
   hotelName:     '',     // from /api/room/{token}
-  serviceType:   null,   // 'CHECKOUT_LUGGAGE_PICKUP' | 'CHECKOUT_ONLY' | 'ROOM_SERVICE'
+  serviceType:   null,   // 'CHECKOUT_LUGGAGE_PICKUP' | 'CHECKOUT_ONLY'
   minibarUsed:   null,   // 'USED' | 'NOT_USED'
-  message:       '',     // for room service
+  message:       '',
   requestStatus: 'DRAFT',
   timestamp:     null,
   currentScreen: 0,
@@ -38,7 +37,6 @@ const dom = {
   /* S0 */
   s0:         el('s0'),
   inpRoom:    el('inp-room'),
-  inpFloor:   el('inp-floor'),
   s0Error:    el('s0-error'),
   btnS0Next:  el('btn-s0-next'),
 
@@ -63,7 +61,6 @@ const dom = {
   /* S3 — Review */
   s3:         el('s3'),
   rvRoom:     el('rv-room'),
-  rvFloor:    el('rv-floor'),
   rvService:  el('rv-service'),
   rvMinibar:  el('rv-minibar'),
   rvMinibarRow: el('rv-minibar-row'),
@@ -78,7 +75,6 @@ const dom = {
   successText: el('successText'),
   successMeta: el('successMeta'),
   smRoom:      el('sm-room'),
-  smFloor:     el('sm-floor'),
   smTime:      el('sm-time'),
   btnRestart:  el('btn-restart'),
 
@@ -128,17 +124,13 @@ function initS0() {
   const proceed = async () => {
     if (state.isTransitioning) return;
     
-    const room  = dom.inpRoom.value.trim().substring(0, 6);
-    const floor = dom.inpFloor.value.trim().substring(0, 4);
-    
-    const roomOk  = room  && /^\d+$/.test(room)  && parseInt(room, 10) >= 1;
-    const floorOk = floor && /^\d+$/.test(floor) && parseInt(floor, 10) >= 1;
+    const room = dom.inpRoom.value.trim().substring(0, 6);
+    const roomOk = room && room.length >= 1;
 
-    dom.inpRoom.classList.toggle('input-field--error',  !roomOk);
-    dom.inpFloor.classList.toggle('input-field--error', !floorOk);
+    dom.inpRoom.classList.toggle('input-field--error', !roomOk);
 
-    if (!roomOk || !floorOk) {
-      showS0Error('Please enter valid room and floor numbers.');
+    if (!roomOk) {
+      showS0Error('Please enter a valid room number.');
       return;
     }
 
@@ -158,7 +150,6 @@ function initS0() {
       const data = await res.json();
       state.session = data.session;
       state.room    = room;
-      state.floor   = floor;
       hideS0Error();
       goToScreen(1);
     } catch (err) {
@@ -171,13 +162,10 @@ function initS0() {
   };
 
   dom.btnS0Next.addEventListener('click', proceed);
-
-  [dom.inpRoom, dom.inpFloor].forEach(inp => {
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') proceed(); });
-    inp.addEventListener('input', () => {
-      inp.classList.remove('input-field--error');
-      if (dom.inpRoom.value.trim() && dom.inpFloor.value.trim()) hideS0Error();
-    });
+  dom.inpRoom.addEventListener('keydown', e => { if (e.key === 'Enter') proceed(); });
+  dom.inpRoom.addEventListener('input', () => {
+    dom.inpRoom.classList.remove('input-field--error');
+    if (dom.inpRoom.value.trim()) hideS0Error();
   });
 }
 
@@ -201,19 +189,11 @@ function initS1() {
 
   dom.btnS1Next.addEventListener('click', () => {
     if (!state.serviceType) return;
-    if (state.serviceType === 'ROOM_SERVICE') {
-      dom.s2Eyebrow.textContent = 'YOUR REQUEST';
-      dom.s2Title.textContent = 'What do you need?';
-      dom.s2MinibarGrp.style.display = 'none';
-      dom.s2MessageGrp.style.display = 'block';
-      dom.btnS2Next.disabled = false;
-    } else {
-      dom.s2Eyebrow.textContent = 'MINIBAR';
-      dom.s2Title.textContent = 'Have you used anything from the minibar?';
-      dom.s2MinibarGrp.style.display = '';
-      dom.s2MessageGrp.style.display = 'none';
-      dom.btnS2Next.disabled = !state.minibarUsed;
-    }
+    dom.s2Eyebrow.textContent = 'MINIBAR';
+    dom.s2Title.textContent = 'Have you used anything from the minibar?';
+    dom.s2MinibarGrp.style.display = '';
+    if (dom.s2MessageGrp) dom.s2MessageGrp.style.display = 'none';
+    dom.btnS2Next.disabled = !state.minibarUsed;
     goToScreen(2);
   });
 
@@ -292,24 +272,15 @@ function initS2() {
 
 /* ─── S3: REVIEW & CONFIRM ────────────────────────────────── */
 function buildReview() {
-  dom.rvRoom.textContent  = state.room;
-  dom.rvFloor.textContent = state.floor;
-
-  if (state.serviceType === 'ROOM_SERVICE') {
-    dom.rvService.textContent = 'Room Service & Requests';
-    dom.rvMinibarRow.style.display = 'none';
-    dom.rvMessageRow.style.display = 'flex';
-    dom.rvMessage.textContent = state.message;
-  } else {
-    dom.rvService.textContent = state.serviceType === 'CHECKOUT_LUGGAGE_PICKUP'
-      ? 'Checkout & Luggage Pickup'
-      : 'Checkout Only';
-    dom.rvMinibarRow.style.display = 'flex';
-    dom.rvMessageRow.style.display = 'none';
-    dom.rvMinibar.textContent = state.minibarUsed === 'USED'
-      ? 'Used — will be verified'
-      : 'Not used';
-  }
+  dom.rvRoom.textContent = state.room;
+  dom.rvService.textContent = state.serviceType === 'CHECKOUT_LUGGAGE_PICKUP'
+    ? 'Checkout & Luggage Pickup'
+    : 'Checkout Only';
+  dom.rvMinibarRow.style.display = 'flex';
+  if (dom.rvMessageRow) dom.rvMessageRow.style.display = 'none';
+  dom.rvMinibar.textContent = state.minibarUsed === 'USED'
+    ? 'Used — will be verified'
+    : 'Not used';
 }
 
 function initS3() {
@@ -326,20 +297,11 @@ async function submitRequest() {
   dom.btnS3Conf.textContent = 'Sending…';
 
   try {
-    // Compose a human-readable message for the staff queue
-    let message = '';
-    let reqType = 'checkout';
-    
-    if (state.serviceType === 'ROOM_SERVICE') {
-      reqType = 'room_service';
-      message = state.message;
-    } else {
-      const serviceLine = state.serviceType === 'CHECKOUT_LUGGAGE_PICKUP'
-        ? 'Checkout & Luggage Pickup'
-        : 'Checkout Only';
-      const minibarLine = state.minibarUsed === 'USED' ? 'Yes (will be verified)' : 'No';
-      message = `Service: ${serviceLine}\nMinibar used: ${minibarLine}`;
-    }
+    const serviceLine = state.serviceType === 'CHECKOUT_LUGGAGE_PICKUP'
+      ? 'Checkout & Luggage Pickup'
+      : 'Checkout Only';
+    const minibarLine = state.minibarUsed === 'USED' ? 'Yes (will be verified)' : 'No';
+    const message = `Service: ${serviceLine}\nMinibar used: ${minibarLine}`;
 
     const res = await fetch('/api/requests', {
       method: 'POST',
@@ -348,7 +310,7 @@ async function submitRequest() {
         'X-Session': state.session
       },
       body: JSON.stringify({
-        type: reqType,
+        type: 'checkout',
         message: message,
         preferred_time: ''
       })
@@ -363,16 +325,14 @@ async function submitRequest() {
     state.requestStatus = 'SENT';
     state.timestamp     = now.toISOString();
 
-    dom.smRoom.textContent  = state.room;
-    dom.smFloor.textContent = state.floor;
-    dom.smTime.textContent  = now.toLocaleTimeString('en-IN', {
+    dom.smRoom.textContent = state.room;
+    dom.smTime.textContent = now.toLocaleTimeString('en-IN', {
       hour: '2-digit', minute: '2-digit', hour12: true,
     });
 
     goToScreen(4);
     runSuccessAnimation();
   } catch (err) {
-    // Show error inline on the review screen
     let errEl = document.getElementById('s3-error');
     if (!errEl) {
       errEl = document.createElement('p');
@@ -408,8 +368,7 @@ function resetApp() {
   document.querySelectorAll('input[name="service"], input[name="minibar"]')
     .forEach(r => { r.checked = false; });
 
-  if (dom.inpRoom)  { dom.inpRoom.value  = ''; dom.inpRoom.classList.remove('input-field--error'); }
-  if (dom.inpFloor) { dom.inpFloor.value = ''; dom.inpFloor.classList.remove('input-field--error'); }
+  if (dom.inpRoom) { dom.inpRoom.value = ''; dom.inpRoom.classList.remove('input-field--error'); }
   if (dom.inpMessage) { dom.inpMessage.value = ''; dom.inpMessage.classList.remove('input-field--error'); }
   dom.s0Error.classList.add('hidden');
 
@@ -463,15 +422,14 @@ async function init() {
       // Display hotel name in the welcome heading
       const subtitle = document.querySelector('#s0 .screen-subtitle');
       if (subtitle && state.hotelName) {
-        subtitle.textContent = `Welcome to ${state.hotelName}. Enter your room details to begin.`;
+        subtitle.textContent = `Welcome to ${state.hotelName}. Enter your room number to begin.`;
       }
     } catch {
       // QR is invalid or expired — lock the form and show an error
       showS0Error('This QR code is not active or has expired. Please call reception for assistance.');
       dom.btnS0Next.textContent = 'QR Code Inactive';
       dom.btnS0Next.disabled = true;
-      dom.inpRoom.disabled  = true;
-      dom.inpFloor.disabled = true;
+      dom.inpRoom.disabled = true;
       return;
     }
   }
