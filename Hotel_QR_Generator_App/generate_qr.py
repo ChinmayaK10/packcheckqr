@@ -15,12 +15,8 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont
 from qrcode.constants import ERROR_CORRECT_Q
 
-LABEL_W, LABEL_H = 640, 1020
+LABEL_W, LABEL_H = 640, 820
 A4_W, A4_H = 2480, 3508
-
-GOLD   = "#C9A84C"
-DARK   = "#0A0A0A"
-SILVER = "#AAAAAA"
 
 
 def ask(prompt, default=None, cast=str):
@@ -43,14 +39,8 @@ def room_number(floor, index):
     return f"{floor}{index:02d}"
 
 
-def font(size, bold=True):
-    candidates = (
-        "arialbd.ttf", "Arial Bold.ttf", "calibrib.ttf",
-        "DejaVuSans-Bold.ttf", "DejaVuSans.ttf",
-    ) if bold else (
-        "arial.ttf", "calibri.ttf", "DejaVuSans.ttf",
-    )
-    for name in candidates:
+def font(size):
+    for name in ("DejaVuSans-Bold.ttf", "DejaVuSans.ttf"):
         try:
             return ImageFont.truetype(name, size)
         except OSError:
@@ -63,119 +53,21 @@ def centered(draw, y, text, fnt, fill):
     draw.text(((LABEL_W - width) / 2, y), text, font=fnt, fill=fill)
 
 
-def _icon(draw, idx, cx, cy, r, color):
-    """Draw simple icon inside a circle for the three service labels."""
-    if idx == 0:  # Bottle (minibar)
-        bw = max(2, r // 3)
-        draw.rectangle([cx - bw, cy - r, cx + bw, cy + r], outline=color, width=1)
-        draw.rectangle([cx - bw + 1, cy - r - 5, cx + bw - 1, cy - r], outline=color, width=1)
-        draw.line([(cx - bw, cy - r // 3), (cx + bw, cy - r // 3)], fill=color, width=1)
-    elif idx == 1:  # Luggage
-        draw.rectangle([cx - r, cy - r // 3, cx + r, cy + r], outline=color, width=1)
-        draw.rectangle([cx - r // 2, cy - r, cx + r // 2, cy - r // 3], outline=color, width=1)
-        draw.line([(cx, cy - r // 3), (cx, cy + r)], fill=color, width=1)
-    else:  # Bell / front desk
-        draw.arc([cx - r, cy - r // 2, cx + r, cy + r // 2], start=180, end=0, fill=color, width=1)
-        draw.line([(cx - r, cy + r // 2), (cx + r, cy + r // 2)], fill=color, width=2)
-        draw.line([(cx - 2, cy - r), (cx + 2, cy - r)], fill=color, width=2)
+def make_label(url, hotel_name, number):
+    qr = qrcode.QRCode(error_correction=ERROR_CORRECT_Q, box_size=12, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    qr.box_size = max(1, 520 // (qr.modules_count + 2 * qr.border))
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
 
-
-def make_label(url, hotel_name, number, logo_path=None):
-    img  = Image.new("RGB", (LABEL_W, LABEL_H), DARK)
-    draw = ImageDraw.Draw(img)
-
-    # ── Double gold border ────────────────────────────────────
-    for off, w in [(10, 2), (18, 1)]:
-        draw.rectangle([off, off, LABEL_W - off, LABEL_H - off], outline=GOLD, width=w)
-
-    # ── Hotel logo circle (only if logo provided) ─────────────
-    lx, ly, lr = LABEL_W // 2, 108, 52
-    if logo_path:
-        for gap, w in [(10, 2), (6, 1)]:  # double ring
-            draw.ellipse([lx-lr-gap, ly-lr-gap, lx+lr+gap, ly+lr+gap], outline=GOLD, width=w)
-        draw.ellipse([lx-lr, ly-lr, lx+lr, ly+lr], fill=DARK)
-        try:
-            logo_img = Image.open(logo_path).convert("RGBA")
-            logo_img = logo_img.resize((lr * 2, lr * 2), Image.LANCZOS)
-            mask = Image.new("L", (lr * 2, lr * 2), 0)
-            ImageDraw.Draw(mask).ellipse([0, 0, lr * 2 - 1, lr * 2 - 1], fill=255)
-            img.paste(logo_img, (lx - lr, ly - lr), mask)
-        except Exception:
-            pass
-        y = ly + lr + 22
-    else:
-        y = 40  # no logo — start content higher
-
-    # ── Hotel name ────────────────────────────────────────────
-    centered(draw, y, hotel_name.upper()[:24], font(32), GOLD)
-    y += 44
-    centered(draw, y, "H O T E L", font(14), GOLD)
-    y += 26
-
-    # Thin divider line
-    draw.line([(LABEL_W // 2 - 55, y + 4), (LABEL_W // 2 + 55, y + 4)], fill=GOLD, width=1)
-    y += 26
-
-    # ── Headline ──────────────────────────────────────────────
-    centered(draw, y, "Y O U R   C H E C K - O U T", font(15), GOLD)
-    y += 32
-    centered(draw, y, "Made Simple.", font(54), "#FFFFFF")
-    y += 70
-
-    # ── Description ──────────────────────────────────────────
-    centered(draw, y, "Scan the QR code to complete", font(18, bold=False), SILVER)
-    y += 28
-    centered(draw, y, "your check-out process.", font(18, bold=False), SILVER)
-    y += 28
-
-    # Room number (subtle, centered)
-    centered(draw, y, f"Room  {number}", font(14), GOLD)
-    y += 28
-
-    # ── QR code in white box with gold border ─────────────────
-    TARGET = 258
-    qr_obj = qrcode.QRCode(error_correction=ERROR_CORRECT_Q, box_size=10, border=2)
-    qr_obj.add_data(url)
-    qr_obj.make(fit=True)
-    qr_raw = qr_obj.make_image(fill_color="black", back_color="white").convert("RGB")
-    qr_raw = qr_raw.resize((TARGET, TARGET), Image.LANCZOS)
-
-    pad = 16
-    bx  = LABEL_W // 2 - TARGET // 2 - pad
-    bw  = TARGET + pad * 2
-    draw.rectangle([bx, y, bx + bw, y + bw], fill="#FFFFF8", outline=GOLD, width=3)
-    img.paste(qr_raw, (bx + pad, y + pad))
-    y += bw + 28
-
-    # ── Three service icons ───────────────────────────────────
-    col    = LABEL_W // 3
-    icon_r = 26
-    labels = ["MINIBAR\nDECLARATION", "LUGGAGE\nPICKUP", "NOTIFY\nFRONT DESK"]
-    ifnt   = font(12)
-
-    for i, lbl in enumerate(labels):
-        cx = col * i + col // 2
-        cy = y + icon_r + 4
-        draw.ellipse([cx - icon_r, cy - icon_r, cx + icon_r, cy + icon_r], outline=GOLD, width=2)
-        _icon(draw, i, cx, cy, icon_r - 8, GOLD)
-        ty = cy + icon_r + 6
-        for line in lbl.split("\n"):
-            lw = draw.textlength(line, font=ifnt)
-            draw.text(((col * i + (col - lw) / 2), ty), line, font=ifnt, fill=GOLD)
-            ty += 15
-        if i > 0:  # vertical divider
-            draw.line([(col * i, y + 4), (col * i, y + icon_r * 2 + 38)], fill=GOLD, width=1)
-
-    y += icon_r * 2 + 56
-
-    # ── Footer ────────────────────────────────────────────────
-    draw.line([(28, y), (LABEL_W - 28, y)], fill=GOLD, width=1)
-    y += 14
-    centered(draw, y, "P O W E R E D   B Y", font(11, bold=False), "#777777")
-    y += 20
-    centered(draw, y, "✦  P A C K - C H E C K", font(18), GOLD)
-
-    return img
+    label = Image.new("RGB", (LABEL_W, LABEL_H), "white")
+    draw = ImageDraw.Draw(label)
+    draw.rectangle([0, 0, LABEL_W - 1, LABEL_H - 1], outline="#bbbbbb", width=2)
+    centered(draw, 36, hotel_name[:28], font(34), "#123a34")
+    label.paste(qr_img, ((LABEL_W - qr_img.width) // 2, 100 + (520 - qr_img.height) // 2))
+    centered(draw, 650, f"Room {number}", font(56), "black")
+    centered(draw, 735, "Scan for room service", font(28), "#555555")
+    return label
 
 
 def build_pdf(labels, pdf_path):
