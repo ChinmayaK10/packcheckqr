@@ -2,6 +2,8 @@
 *.db
 *.sqlite
 *.sqlite3
+*firebase*.json
+firebase_key.json
 __pycache__/
 *.pyc
 .pytest_cache/

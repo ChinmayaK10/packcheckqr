@@ -2,6 +2,7 @@ import asyncio
 import hmac
 import json
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -54,77 +55,69 @@ ROOMS_FILE_PATHS = [
 ]
 
 
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("database_url", "")
+FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH", "firebase_key.json")
+FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS_JSON", "")
+FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL") or os.getenv("firebase_database_url", "")
+
+firebase_initialized = False
 
 
-def get_db_conn():
-    db_url = os.getenv("DATABASE_URL") or os.getenv("database_url", "")
-    if not db_url:
-        return None
+def init_firebase() -> bool:
+    global firebase_initialized
+    if firebase_initialized:
+        return True
+
+    if not FIREBASE_DATABASE_URL:
+        return False
+
     try:
-        import psycopg2
-        url = db_url
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql://", 1)
-        if "sslmode" not in url:
-            url += ("&" if "?" in url else "?") + "sslmode=require"
-        conn = psycopg2.connect(url, connect_timeout=5)
-        return conn
+        import firebase_admin
+        from firebase_admin import credentials, db
+
+        if firebase_admin._apps:
+            firebase_initialized = True
+            return True
+
+        cred = None
+        # Option 1: Inline JSON string (perfect for Vercel/Render env vars)
+        if FIREBASE_CREDENTIALS_JSON and FIREBASE_CREDENTIALS_JSON.strip():
+            try:
+                cred_dict = json.loads(FIREBASE_CREDENTIALS_JSON.strip())
+                cred = credentials.Certificate(cred_dict)
+            except Exception as e:
+                print(f"Warning: Failed to parse FIREBASE_CREDENTIALS_JSON: {e}")
+
+        # Option 2: File path (local development)
+        if not cred:
+            candidates = [
+                Path(FIREBASE_CREDENTIALS_PATH),
+                BASE / FIREBASE_CREDENTIALS_PATH,
+                BASE.parent / FIREBASE_CREDENTIALS_PATH,
+                Path.cwd() / FIREBASE_CREDENTIALS_PATH,
+                BASE / "firebase_key.json",
+                BASE.parent / "firebase_key.json",
+                Path.cwd() / "firebase_key.json",
+            ]
+            for c in candidates:
+                if c.is_file():
+                    cred = credentials.Certificate(str(c))
+                    break
+
+        if cred:
+            clean_url = FIREBASE_DATABASE_URL.strip()
+            firebase_admin.initialize_app(cred, {"databaseURL": clean_url})
+            firebase_initialized = True
+            print("Successfully connected to Firebase Realtime Database.")
+            return True
+        else:
+            return False
     except Exception as exc:
-        print(f"Warning: Cloud Database connection error: {exc}")
-        return None
+        print(f"Warning: Firebase Realtime Database initialization error: {exc}")
+        return False
 
 
-
-def init_db_tables():
-    conn = get_db_conn()
-    if not conn:
-        return
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-            CREATE TABLE IF NOT EXISTS hotels (
-                id VARCHAR(64) PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                admin_key VARCHAR(255),
-                staff_key VARCHAR(255),
-                webhook_url TEXT,
-                created_at DOUBLE PRECISION
-            );
-
-            CREATE TABLE IF NOT EXISTS rooms (
-                token VARCHAR(64) PRIMARY KEY,
-                hotel_id VARCHAR(64) NOT NULL,
-                hotel_name VARCHAR(255) NOT NULL,
-                floor INT NOT NULL,
-                room_number VARCHAR(20) NOT NULL,
-                active BOOLEAN DEFAULT TRUE,
-                created_at DOUBLE PRECISION
-            );
-
-            CREATE TABLE IF NOT EXISTS requests (
-                id SERIAL PRIMARY KEY,
-                hotel_id VARCHAR(64) NOT NULL,
-                room_number VARCHAR(20) NOT NULL,
-                type VARCHAR(32) NOT NULL,
-                message TEXT,
-                preferred_time VARCHAR(64),
-                status VARCHAR(32) NOT NULL DEFAULT 'new',
-                created_at DOUBLE PRECISION NOT NULL,
-                updated_at DOUBLE PRECISION NOT NULL,
-                forward_status VARCHAR(32) DEFAULT 'pending',
-                forward_attempts INT DEFAULT 0
-            );
-            """)
-            conn.commit()
-            print("Successfully connected and initialized Supabase PostgreSQL database tables.")
-    except Exception as exc:
-        print(f"Error initializing DB tables: {exc}")
-    finally:
-        conn.close()
-
-
-init_db_tables()
+# Attempt initial connection if configured
+init_firebase()
 
 
 def load_rooms_db():
@@ -175,61 +168,28 @@ def save_rooms_db():
 
 
 def get_room_from_db(token: str) -> Optional[dict]:
-    conn = get_db_conn()
-    if conn:
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT token, hotel_id, hotel_name, floor, room_number, active FROM rooms WHERE token = %s;", (token,))
-                row = cur.fetchone()
-                if row:
-                    room = {
-                        "token": row[0],
-                        "hotel_id": row[1],
-                        "hotel_name": row[2],
-                        "floor": row[3],
-                        "room_number": row[4],
-                        "active": bool(row[5]),
-                    }
-                    rooms_db[token] = room
-                    return room
-        except Exception as exc:
-            print(f"DB error fetching room {token}: {exc}")
-        finally:
-            conn.close()
+    # 1. Fast in-memory cache check
+    if token in rooms_db:
+        return rooms_db[token]
 
-    if token not in rooms_db:
-        load_rooms_db()
+    # 2. Check Firebase Realtime Database
+    if init_firebase():
+        try:
+            from firebase_admin import db
+            rtdb_room = db.reference(f"rooms/{token}").get()
+            if rtdb_room and isinstance(rtdb_room, dict):
+                rooms_db[token] = rtdb_room
+                return rtdb_room
+        except Exception as exc:
+            print(f"Firebase error fetching room {token}: {exc}")
+
+    # 3. Fallback to local rooms.json
+    load_rooms_db()
     return rooms_db.get(token)
 
 
 def db_bulk_register(hotel_id: str, hotel_name: str, rooms: list) -> int:
-    conn = get_db_conn()
-    count = 0
     now = time.time()
-    if conn:
-        try:
-            with conn.cursor() as cur:
-                for r in rooms:
-                    t = str(r.get("token", ""))
-                    fl = int(r.get("floor", 1))
-                    rn = str(r.get("room_number", ""))
-                    cur.execute("""
-                    INSERT INTO rooms (token, hotel_id, hotel_name, floor, room_number, active, created_at)
-                    VALUES (%s, %s, %s, %s, %s, TRUE, %s)
-                    ON CONFLICT (token) DO UPDATE SET
-                        hotel_id = EXCLUDED.hotel_id,
-                        hotel_name = EXCLUDED.hotel_name,
-                        floor = EXCLUDED.floor,
-                        room_number = EXCLUDED.room_number,
-                        active = TRUE;
-                    """, (t, hotel_id, hotel_name, fl, rn, now))
-                    count += 1
-                conn.commit()
-        except Exception as exc:
-            print(f"DB error in bulk register: {exc}")
-        finally:
-            conn.close()
-
     for r in rooms:
         token = str(r.get("token", ""))
         floor = int(r.get("floor", 1))
@@ -243,49 +203,81 @@ def db_bulk_register(hotel_id: str, hotel_name: str, rooms: list) -> int:
             "active": True,
         }
     save_rooms_db()
-    return count if conn else len(rooms)
 
-
-def db_create_request(hotel_id: str, room_number: str, type_: str, message: str, preferred_time: str, forward_status: str) -> dict:
-    now = time.time()
-    conn = get_db_conn()
-    if conn:
+    # Sync to Firebase Realtime Database if connected
+    if init_firebase():
         try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                INSERT INTO requests (hotel_id, room_number, type, message, preferred_time, status, created_at, updated_at, forward_status, forward_attempts)
-                VALUES (%s, %s, %s, %s, %s, 'new', %s, %s, %s, 0)
-                RETURNING id;
-                """, (hotel_id, room_number, type_, message, preferred_time, now, now, forward_status))
-                req_id = cur.fetchone()[0]
-                conn.commit()
-                req_obj = {
-                    "id": req_id,
+            from firebase_admin import db
+            rooms_updates = {}
+            for r in rooms:
+                t = str(r.get("token", ""))
+                fl = int(r.get("floor", 1))
+                rn = str(r.get("room_number", ""))
+                rooms_updates[f"rooms/{t}"] = {
+                    "token": t,
                     "hotel_id": hotel_id,
-                    "room_number": room_number,
-                    "type": type_,
-                    "message": message,
-                    "preferred_time": preferred_time,
-                    "status": "new",
+                    "hotel_name": hotel_name,
+                    "floor": fl,
+                    "room_number": rn,
+                    "active": True,
                     "created_at": now,
-                    "updated_at": now,
-                    "forward_status": forward_status,
-                    "forward_attempts": 0
                 }
-                requests_db.append(req_obj)
-                return req_obj
+            db.reference().update(rooms_updates)
         except Exception as exc:
-            print(f"DB error creating request: {exc}")
-        finally:
-            conn.close()
+            print(f"Firebase error in bulk register: {exc}")
 
+    return len(rooms)
+
+
+def db_create_request(
+    hotel_id: str,
+    room_number: str,
+    type_: str,
+    message: str,
+    preferred_time: str,
+    forward_status: str,
+    hotel_name: str = "",
+    floor: int = 1,
+) -> dict:
     global next_request_id
+    now = time.time()
     req_id = next_request_id
     next_request_id += 1
+
+    clean_hotel = (hotel_name or hotel_id or "Hotel").strip()
+    safe_hotel = re.sub(r'[\.\#\$\/\[\]]', '_', clean_hotel)
+
+    clean_room = str(room_number).strip().lower().replace("room", "")
+    room_key = f"room{clean_room}"
+    floor_key = f"Floor {floor}"
+
+    # Determine "Request" label:
+    # "Checkout Only" vs "Checkout & Cart Assistance"
+    msg_low = message.lower()
+    if type_ == "cart" or "cart" in msg_low or "pickup" in msg_low or "assistance" in msg_low or "luggage" in msg_low:
+        req_label = "Checkout & Cart Assistance"
+    else:
+        req_label = "Checkout Only"
+
+    # Determine "MiniBar" label: "yes" vs "no"
+    if (
+        "minibar: used" in msg_low
+        or "minibar used: yes" in msg_low
+        or "used — usage will be noted" in msg_low
+        or "yes (will be verified)" in msg_low
+        or "minibar: yes" in msg_low
+        or "\nminibar: yes" in msg_low
+    ):
+        minibar_label = "yes"
+    else:
+        minibar_label = "no"
+
     req_obj = {
         "id": req_id,
         "hotel_id": hotel_id,
+        "hotel_name": clean_hotel,
         "room_number": room_number,
+        "floor": floor,
         "type": type_,
         "message": message,
         "preferred_time": preferred_time,
@@ -293,39 +285,32 @@ def db_create_request(hotel_id: str, room_number: str, type_: str, message: str,
         "created_at": now,
         "updated_at": now,
         "forward_status": forward_status,
-        "forward_attempts": 0
+        "forward_attempts": 0,
     }
     requests_db.append(req_obj)
+
+    # ── Write directly to Firebase Realtime Database in user's exact schema ──
+    if init_firebase():
+        try:
+            from firebase_admin import db
+            # 1. Update room node under Hotels in exact requested structure:
+            # /Hotels/{hotel_name}/Floor {floor}/room{room_number} -> { Floor, Request, MiniBar }
+            hotel_node = db.reference(f"Hotels/{safe_hotel}/{floor_key}/{room_key}")
+            hotel_node.set({
+                "Floor": int(floor),
+                "Request": req_label,
+                "MiniBar": minibar_label,
+            })
+
+            # 2. Store in requests queue for reception dashboard and history
+            db.reference(f"requests/{req_id}").set(req_obj)
+        except Exception as exc:
+            print(f"Firebase Realtime Database write error: {exc}")
+
     return req_obj
 
 
 def db_get_my_requests(hotel_id: str, room_number: str) -> list[dict]:
-    conn = get_db_conn()
-    if conn:
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                SELECT id, type, message, preferred_time, status, created_at
-                FROM requests
-                WHERE hotel_id = %s AND room_number = %s AND created_at > %s
-                ORDER BY id DESC LIMIT 50;
-                """, (hotel_id, room_number, time.time() - 86400))
-                rows = cur.fetchall()
-                return [
-                    {
-                        "id": r[0],
-                        "type": r[1],
-                        "message": r[2],
-                        "preferred_time": r[3],
-                        "status": r[4],
-                        "created_at": r[5],
-                    } for r in rows
-                ]
-        except Exception as exc:
-            print(f"DB error fetching my requests: {exc}")
-        finally:
-            conn.close()
-
     now = time.time()
     return [
         {
@@ -337,80 +322,52 @@ def db_get_my_requests(hotel_id: str, room_number: str) -> list[dict]:
             "created_at": r["created_at"],
         }
         for r in reversed(requests_db)
-        if r["hotel_id"] == hotel_id
-        and r["room_number"] == room_number
-        and r["created_at"] > now - 86400
+        if r.get("hotel_id") == hotel_id
+        and r.get("room_number") == room_number
+        and r.get("created_at", 0) > now - 86400
     ]
 
 
 def db_get_staff_requests(status_filter: Optional[str], hotel_id_filter: Optional[str], limit: int) -> list[dict]:
-    conn = get_db_conn()
-    if conn:
+    items = []
+    if init_firebase():
         try:
-            with conn.cursor() as cur:
-                query = """
-                SELECT req.id, req.hotel_id, req.room_number, rm.floor, req.type, req.message, req.preferred_time, req.status, req.created_at, req.updated_at, req.forward_status
-                FROM requests req
-                LEFT JOIN rooms rm ON req.hotel_id = rm.hotel_id AND req.room_number = rm.room_number
-                WHERE 1=1
-                """
-                params = []
-                if status_filter:
-                    query += " AND req.status = %s"
-                    params.append(status_filter)
-                if hotel_id_filter:
-                    query += " AND req.hotel_id = %s"
-                    params.append(hotel_id_filter)
-                query += " ORDER BY req.id DESC LIMIT %s;"
-                params.append(min(limit, 500))
-
-                cur.execute(query, params)
-                rows = cur.fetchall()
-                return [
-                    {
-                        "id": r[0],
-                        "hotel_id": r[1],
-                        "room_number": r[2],
-                        "floor": r[3],
-                        "type": r[4],
-                        "message": r[5],
-                        "preferred_time": r[6],
-                        "status": r[7],
-                        "created_at": r[8],
-                        "updated_at": r[9],
-                        "forward_status": r[10],
-                    } for r in rows
-                ]
+            from firebase_admin import db
+            data = db.reference("requests").order_by_child("created_at").limit_to_last(min(limit, 500)).get()
+            if data and isinstance(data, dict):
+                items = list(data.values())
         except Exception as exc:
-            print(f"DB error fetching staff requests: {exc}")
-        finally:
-            conn.close()
+            print(f"Firebase fetch error in staff queue: {exc}")
+
+    if not items:
+        items = list(requests_db)
 
     results = []
-    for r in reversed(requests_db):
-        if status_filter and r["status"] != status_filter:
+    for r in reversed(items):
+        if status_filter and r.get("status") != status_filter:
             continue
-        if hotel_id_filter and r["hotel_id"] != hotel_id_filter:
+        if hotel_id_filter and r.get("hotel_id") != hotel_id_filter:
             continue
 
-        floor = None
-        for rm in rooms_db.values():
-            if rm["hotel_id"] == r["hotel_id"] and rm["room_number"] == r["room_number"]:
-                floor = rm.get("floor")
-                break
+        floor = r.get("floor")
+        if floor is None:
+            for rm in rooms_db.values():
+                if rm.get("hotel_id") == r.get("hotel_id") and rm.get("room_number") == r.get("room_number"):
+                    floor = rm.get("floor")
+                    break
 
         results.append({
-            "id": r["id"],
-            "hotel_id": r["hotel_id"],
-            "room_number": r["room_number"],
+            "id": r.get("id"),
+            "hotel_id": r.get("hotel_id"),
+            "room_number": r.get("room_number"),
             "floor": floor,
-            "type": r["type"],
-            "message": r["message"],
-            "preferred_time": r["preferred_time"],
-            "status": r["status"],
-            "created_at": r["created_at"],
-            "updated_at": r["updated_at"],
-            "forward_status": r["forward_status"],
+            "type": r.get("type"),
+            "message": r.get("message"),
+            "preferred_time": r.get("preferred_time"),
+            "status": r.get("status"),
+            "created_at": r.get("created_at"),
+            "updated_at": r.get("updated_at"),
+            "forward_status": r.get("forward_status"),
         })
         if len(results) >= min(limit, 500):
             break
@@ -418,20 +375,19 @@ def db_get_staff_requests(status_filter: Optional[str], hotel_id_filter: Optiona
 
 
 def db_update_staff_request(request_id: int, new_status: str) -> dict:
-    conn = get_db_conn()
     now = time.time()
-    if conn:
+    if init_firebase():
         try:
-            with conn.cursor() as cur:
-                cur.execute("UPDATE requests SET status = %s, updated_at = %s WHERE id = %s;", (new_status, now, request_id))
-                conn.commit()
+            from firebase_admin import db
+            db.reference(f"requests/{request_id}").update({
+                "status": new_status,
+                "updated_at": now,
+            })
         except Exception as exc:
-            print(f"DB error updating request status: {exc}")
-        finally:
-            conn.close()
+            print(f"Firebase update error for request {request_id}: {exc}")
 
     for r in requests_db:
-        if r["id"] == request_id:
+        if r.get("id") == request_id:
             r["status"] = new_status
             r["updated_at"] = now
             return {"id": request_id, "status": new_status}
@@ -439,23 +395,19 @@ def db_update_staff_request(request_id: int, new_status: str) -> dict:
 
 
 def db_deactivate_room(hotel_id: str, room_number: str) -> bool:
-    conn = get_db_conn()
     deactivated = False
-    if conn:
-        try:
-            with conn.cursor() as cur:
-                cur.execute("UPDATE rooms SET active = FALSE WHERE hotel_id = %s AND room_number = %s;", (hotel_id, room_number))
-                conn.commit()
-                deactivated = cur.rowcount > 0
-        except Exception as exc:
-            print(f"DB error deactivating room: {exc}")
-        finally:
-            conn.close()
-
     for rm in rooms_db.values():
-        if rm["hotel_id"] == hotel_id and rm["room_number"] == room_number:
+        if rm.get("hotel_id") == hotel_id and rm.get("room_number") == room_number:
             rm["active"] = False
             deactivated = True
+            if init_firebase():
+                try:
+                    from firebase_admin import db
+                    t = rm.get("token")
+                    if t:
+                        db.reference(f"rooms/{t}").update({"active": False})
+                except Exception as exc:
+                    print(f"Firebase deactivation error for room {room_number}: {exc}")
     save_rooms_db()
     return deactivated
 
@@ -862,6 +814,8 @@ async def create_request(
         message=message,
         preferred_time=body.preferred_time.strip(),
         forward_status=forward_status,
+        hotel_name=room.get("hotel_name", room["hotel_id"]),
+        floor=int(room.get("floor", 1)),
     )
 
     if MAIN_BACKEND_URL:
@@ -909,45 +863,45 @@ def deactivate_room(hotel_id: str, room_number: str):
     return {"deactivated": room_number}
 
 
+@app.get("/api/admin/firebase-test")
 @app.get("/api/admin/db-test")
-def db_test(x_api_key: Optional[str] = Header(None)):
+def firebase_test(x_api_key: Optional[str] = Header(None)):
     require_admin(x_api_key)
-    db_url = os.getenv("DATABASE_URL") or os.getenv("database_url", "")
+    db_url = os.getenv("FIREBASE_DATABASE_URL") or os.getenv("firebase_database_url", "")
     if not db_url:
         return {
             "ok": False,
-            "error": "No DATABASE_URL or database_url environment variable found in Vercel."
+            "connected": False,
+            "error": "No FIREBASE_DATABASE_URL environment variable found. Please set FIREBASE_DATABASE_URL in .env.",
         }
 
-    safe_url = db_url
-    if "@" in safe_url:
-        prefix, host = safe_url.split("@", 1)
-        safe_url = prefix.split(":")[0] + ":****@" + host
+    ok = init_firebase()
+    if not ok:
+        return {
+            "ok": False,
+            "connected": False,
+            "database_url": db_url,
+            "error": "Firebase SDK could not initialize. Check FIREBASE_CREDENTIALS_PATH or FIREBASE_CREDENTIALS_JSON in .env.",
+        }
 
     try:
-        import psycopg2
-        url = db_url
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql://", 1)
-        if "sslmode" not in url:
-            url += ("&" if "?" in url else "?") + "sslmode=require"
-
-        conn = psycopg2.connect(url, connect_timeout=8)
-        with conn.cursor() as cur:
-            cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public';")
-            tables = [r[0] for r in cur.fetchall()]
-        conn.close()
+        from firebase_admin import db
+        test_val = db.reference(".info/connected").get()
+        hotels_sample = db.reference("Hotels").shallow().get()
+        hotels_list = list(hotels_sample.keys()) if isinstance(hotels_sample, dict) else []
         return {
             "ok": True,
-            "message": "Successfully connected to Supabase PostgreSQL Database!",
-            "database_url_found": safe_url,
-            "existing_tables": tables
+            "connected": True,
+            "message": "Successfully connected to Firebase Realtime Database!",
+            "database_url": db_url,
+            "existing_hotels": hotels_list,
         }
     except Exception as exc:
         return {
             "ok": False,
-            "database_url_found": safe_url,
-            "error": str(exc)
+            "connected": False,
+            "database_url": db_url,
+            "error": f"Firebase Realtime Database read failed: {exc}",
         }
 
 
