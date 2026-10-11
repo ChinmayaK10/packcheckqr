@@ -42,6 +42,7 @@ class QRGeneratorApp(ctk.CTk):
         self.make_pdf = ctk.BooleanVar(value=True)
         self.do_register = ctk.BooleanVar(value=True)
         self.out_dir = ctk.StringVar(value=str(get_default_out_dir()))
+        self.logo_path = ctk.StringVar(value="")
 
         self._build_ui()
         self.after(150, self._drain_events)
@@ -73,23 +74,28 @@ class QRGeneratorApp(ctk.CTk):
         ctk.CTkEntry(main_frame, textvariable=self.out_dir).grid(row=9, column=1, sticky="ew", padx=10, pady=5)
         ctk.CTkButton(main_frame, text="Browse", command=self._browse, width=80).grid(row=9, column=2, sticky="ew", padx=(0, 20), pady=5)
 
+        # Hotel logo row
+        ctk.CTkLabel(main_frame, text="Hotel logo").grid(row=10, column=0, sticky="w", padx=20, pady=5)
+        ctk.CTkEntry(main_frame, textvariable=self.logo_path, placeholder_text="Optional — leave blank for empty circle").grid(row=10, column=1, sticky="ew", padx=10, pady=5)
+        ctk.CTkButton(main_frame, text="Browse", command=self._browse_logo, width=80).grid(row=10, column=2, sticky="ew", padx=(0, 20), pady=5)
+
         # Checkboxes
         checks_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-        checks_frame.grid(row=10, column=1, columnspan=2, sticky="w", padx=10, pady=15)
+        checks_frame.grid(row=11, column=1, columnspan=2, sticky="w", padx=10, pady=15)
         ctk.CTkCheckBox(checks_frame, text="Create print-sheet PDF", variable=self.make_pdf).pack(side="left", padx=(0, 20))
         ctk.CTkCheckBox(checks_frame, text="Register rooms with backend", variable=self.do_register).pack(side="left")
 
         # Generate Button
         self.generate_button = ctk.CTkButton(main_frame, text="Generate QR Codes", command=self._start, height=40, font=ctk.CTkFont(size=14, weight="bold"))
-        self.generate_button.grid(row=11, column=1, columnspan=2, sticky="e", padx=20, pady=10)
+        self.generate_button.grid(row=12, column=1, columnspan=2, sticky="e", padx=20, pady=10)
 
         # Status and Log
         self.status = ctk.CTkLabel(main_frame, text="Ready", font=ctk.CTkFont(size=12, slant="italic"))
-        self.status.grid(row=12, column=0, columnspan=3, sticky="w", padx=20, pady=(10, 0))
+        self.status.grid(row=13, column=0, columnspan=3, sticky="w", padx=20, pady=(10, 0))
 
         self.log = ctk.CTkTextbox(main_frame, height=120, state="disabled")
-        self.log.grid(row=13, column=0, columnspan=3, sticky="nsew", padx=20, pady=10)
-        main_frame.grid_rowconfigure(13, weight=1)
+        self.log.grid(row=14, column=0, columnspan=3, sticky="nsew", padx=20, pady=10)
+        main_frame.grid_rowconfigure(14, weight=1)
 
     def _entry(self, parent, row, label, var, hint=None, show=""):
         ctk.CTkLabel(parent, text=label).grid(row=row, column=0, sticky="w", padx=20, pady=5)
@@ -100,6 +106,14 @@ class QRGeneratorApp(ctk.CTk):
         chosen = filedialog.askdirectory(initialdir=self.out_dir.get() or str(Path.cwd()))
         if chosen:
             self.out_dir.set(chosen)
+
+    def _browse_logo(self):
+        chosen = filedialog.askopenfilename(
+            title="Select hotel logo",
+            filetypes=[("Image files", "*.png *.jpg *.jpeg *.webp *.bmp"), ("All files", "*.*")],
+        )
+        if chosen:
+            self.logo_path.set(chosen)
 
     def _start(self):
         try:
@@ -129,6 +143,7 @@ class QRGeneratorApp(ctk.CTk):
             "start_floor": int(self.start_floor.get()),
             "base_url": self.base_url.get().strip().rstrip("/"),
             "api_url": self.api_url.get().strip().rstrip("/"),
+            "logo_path": self.logo_path.get().strip() or None,
             "out_dir": Path(self.out_dir.get().strip()),
             "make_pdf": self.make_pdf.get(),
             "do_register": self.do_register.get(),
@@ -147,7 +162,7 @@ class QRGeneratorApp(ctk.CTk):
                 for idx in range(1, config["rooms_per_floor"] + 1):
                     number = room_number(floor, idx)
                     token = secrets.token_urlsafe(9)
-                    label = make_label(f"{config['base_url']}/r/{token}", config["hotel_name"], number)
+                    label = make_label(f"{config['base_url']}/r/{token}", config["hotel_name"], number, config.get("logo_path"))
                     label.save(floor_dir / f"room_{number}.png")
                     labels.append(label)
                     rooms.append({"floor": floor, "room_number": number, "token": token})
