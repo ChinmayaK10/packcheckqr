@@ -244,12 +244,18 @@ def db_bulk_register(hotel_id: str, hotel_name: str, rooms: list) -> int:
     if init_firebase():
         try:
             from firebase_admin import db
-            rooms_updates = {}
+            safe_hotel = re.sub(r'[\.#$\/\[\]]', '_', (hotel_name or hotel_id or "Hotel").strip())
+            all_updates = {}
             for r in rooms:
                 t = str(r.get("token", ""))
                 fl = int(r.get("floor", 1))
                 rn = str(r.get("room_number", ""))
-                rooms_updates[f"rooms/{t}"] = {
+                clean_room = rn.strip().lower().replace("room", "")
+                room_key = f"room{clean_room}"
+                floor_key = f"Floor {fl}"
+
+                # 1. Token lookup table: rooms/{token}
+                all_updates[f"rooms/{t}"] = {
                     "token": t,
                     "hotel_id": hotel_id,
                     "hotel_name": hotel_name,
@@ -258,7 +264,15 @@ def db_bulk_register(hotel_id: str, hotel_name: str, rooms: list) -> int:
                     "active": True,
                     "created_at": now,
                 }
-            db.reference().update(rooms_updates)
+
+                # 2. Hotel structure: Hotels/{name}/Floor X/roomY (created immediately on QR generation)
+                all_updates[f"Hotels/{safe_hotel}/{floor_key}/{room_key}"] = {
+                    "Floor": fl,
+                    "MiniBar": "no",
+                    "Request": "None",
+                }
+
+            db.reference().update(all_updates)
         except Exception as exc:
             print(f"Firebase error in bulk register: {exc}")
 
