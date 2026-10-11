@@ -86,8 +86,18 @@ def init_firebase() -> bool:
         cred = None
         raw_json = (os.getenv("FIREBASE_CREDENTIALS_JSON") or os.getenv("firebase_credentials_json") or "").strip()
 
-        # Option 1: Inline JSON string (perfect for Vercel/Render env vars)
+        # Option 1: Inline JSON or Base64 string (perfect for Vercel/Render env vars)
         if raw_json:
+            # Support base64 encoded JSON
+            if not raw_json.startswith("{"):
+                try:
+                    import base64
+                    decoded = base64.b64decode(raw_json).decode("utf-8")
+                    if "{" in decoded:
+                        raw_json = decoded
+                except Exception:
+                    pass
+
             # Clean any leading/trailing garbage characters (like a trailing '4')
             if "{" in raw_json and "}" in raw_json:
                 start = raw_json.find("{")
@@ -97,10 +107,11 @@ def init_firebase() -> bool:
             try:
                 cred_dict = json.loads(raw_json)
                 if isinstance(cred_dict, dict) and "private_key" in cred_dict:
-                    # Fix escaped newlines if Vercel double-escaped them
-                    pk = str(cred_dict["private_key"])
-                    if "\\n" in pk:
-                        cred_dict["private_key"] = pk.replace("\\n", "\n")
+                    pk = str(cred_dict["private_key"]).strip().strip('"').strip("'")
+                    pk = pk.replace("\\n", "\n").replace("\r", "")
+                    lines = [line.strip() for line in pk.split("\n") if line.strip()]
+                    if lines:
+                        cred_dict["private_key"] = "\n".join(lines) + "\n"
                 cred = credentials.Certificate(cred_dict)
             except Exception as e:
                 last_firebase_error = f"Error parsing FIREBASE_CREDENTIALS_JSON: {e}"
