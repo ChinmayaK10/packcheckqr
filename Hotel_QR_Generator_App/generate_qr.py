@@ -85,7 +85,7 @@ def build_pdf(labels, pdf_path):
     pages[0].save(pdf_path, "PDF", resolution=300, save_all=True, append_images=pages[1:])
 
 
-def register(api_url, admin_key, hotel_id, hotel_name, rooms):
+def register(api_url, hotel_id, hotel_name, rooms):
     body = json.dumps({
         "hotel_id": hotel_id,
         "hotel_name": hotel_name,
@@ -94,7 +94,7 @@ def register(api_url, admin_key, hotel_id, hotel_name, rooms):
     req = urllib.request.Request(
         api_url.rstrip("/") + "/api/admin/rooms/bulk",
         data=body,
-        headers={"Content-Type": "application/json", "X-API-Key": admin_key},
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -110,7 +110,6 @@ def main():
     p.add_argument("--start-floor", type=int, default=1)
     p.add_argument("--base-url", default=os.getenv("QR_BASE_URL", "https://packcheckqrbg.vercel.app"), help="Public URL guests will open")
     p.add_argument("--api-url", default=os.getenv("BACKEND_API_URL", "https://packcheckqrbg.vercel.app"), help="Backend URL for registration (default: base URL)")
-    p.add_argument("--admin-key", default=os.getenv("ADMIN_API_KEY", "admin-secret"))
     p.add_argument("--out", default="qr_codes")
     p.add_argument("--no-register", action="store_true", help="Only write files; register later")
     p.add_argument("--no-pdf", action="store_true")
@@ -120,8 +119,7 @@ def main():
     if args.register_only:
         data = json.loads(Path(args.register_only).read_text())
         api_url = args.api_url or args.base_url or ask("Backend URL", "http://localhost:8000")
-        admin_key = args.admin_key or ask("Backend admin key")
-        result = register(api_url, admin_key, data["hotel_id"], data["hotel_name"], data["rooms"])
+        result = register(api_url, data["hotel_id"], data["hotel_name"], data["rooms"])
         print(f"Registered {result['registered']} rooms with {api_url}")
         return
 
@@ -163,9 +161,8 @@ def main():
         print(f"Skipped registration. Later, run: python generate_qr.py --register-only {manifest}")
         return
     api_url = args.api_url or base_url
-    admin_key = args.admin_key or ask("Backend admin key")
     try:
-        result = register(api_url, admin_key, hotel_id, hotel_name, rooms)
+        result = register(api_url, hotel_id, hotel_name, rooms)
         print(f"Registered {result['registered']} rooms with {api_url}")
     except (urllib.error.URLError, OSError) as exc:
         sys.exit(f"QR files are saved, but registration failed: {exc}\n"

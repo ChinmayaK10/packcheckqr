@@ -39,10 +39,9 @@ class QRGeneratorApp(ctk.CTk):
         self.start_floor = ctk.IntVar(value=1)
         self.base_url = ctk.StringVar(value="https://packcheckqrbg.vercel.app")
         self.api_url = ctk.StringVar(value="https://packcheckqrbg.vercel.app")
-        self.admin_key = ctk.StringVar(value="admin-secret")
-        self.out_dir = ctk.StringVar(value=str(get_default_out_dir()))
         self.make_pdf = ctk.BooleanVar(value=True)
         self.do_register = ctk.BooleanVar(value=True)
+        self.out_dir = ctk.StringVar(value=str(get_default_out_dir()))
 
         self._build_ui()
         self.after(150, self._drain_events)
@@ -68,7 +67,6 @@ class QRGeneratorApp(ctk.CTk):
         
         self._entry(main_frame, 6, "Public QR base URL", self.base_url)
         self._entry(main_frame, 7, "Backend API URL", self.api_url)
-        self._entry(main_frame, 8, "Admin key", self.admin_key, show="*")
 
         # Output folder row
         ctk.CTkLabel(main_frame, text="Output folder").grid(row=9, column=0, sticky="w", padx=20, pady=5)
@@ -121,8 +119,8 @@ class QRGeneratorApp(ctk.CTk):
         per_floor = int(self.rooms_per_floor.get())
         if floors < 1 or per_floor < 1 or per_floor > 99:
             raise ValueError("Floors must be at least 1 and rooms per floor must be between 1 and 99.")
-        if self.do_register.get() and not self.admin_key.get().strip():
-            raise ValueError("Admin key is required when registration is enabled.")
+        if self.do_register.get() and not self.api_url.get().strip():
+            raise ValueError("Backend API URL is required when registration is enabled.")
         return {
             "hotel_name": hotel_name,
             "hotel_id": self.hotel_id.get().strip() or slugify(hotel_name),
@@ -131,7 +129,6 @@ class QRGeneratorApp(ctk.CTk):
             "start_floor": int(self.start_floor.get()),
             "base_url": self.base_url.get().strip().rstrip("/"),
             "api_url": self.api_url.get().strip().rstrip("/"),
-            "admin_key": self.admin_key.get().strip(),
             "out_dir": Path(self.out_dir.get().strip()),
             "make_pdf": self.make_pdf.get(),
             "do_register": self.do_register.get(),
@@ -172,7 +169,6 @@ class QRGeneratorApp(ctk.CTk):
             if config["do_register"]:
                 result = register(
                     config["api_url"],
-                    config["admin_key"],
                     config["hotel_id"],
                     config["hotel_name"],
                     rooms,

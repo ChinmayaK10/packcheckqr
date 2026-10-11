@@ -24,7 +24,6 @@ STATIC = BASE / "static"
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
 STAFF_API_KEY = os.getenv("STAFF_API_KEY", "staff-secret")
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "admin-secret")
 MAIN_BACKEND_URL = os.getenv("MAIN_BACKEND_URL", "")
 MAIN_BACKEND_API_KEY = os.getenv("MAIN_BACKEND_API_KEY", "")
 SESSION_TTL = int(os.getenv("SESSION_TTL_SECONDS", "1800"))
@@ -589,8 +588,8 @@ def read_static(filename: str) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_rooms_db()
-    if SECRET_KEY == "change-me" or STAFF_API_KEY == "staff-secret" or ADMIN_API_KEY == "admin-secret":
-        print("WARNING: default secrets in use. Set SECRET_KEY, STAFF_API_KEY and ADMIN_API_KEY in .env")
+    if SECRET_KEY == "change-me" or STAFF_API_KEY == "staff-secret":
+        print("WARNING: default secrets in use. Set SECRET_KEY and STAFF_API_KEY in .env")
     task = asyncio.create_task(retry_loop()) if MAIN_BACKEND_URL else None
     yield
     if task:
@@ -712,9 +711,7 @@ def require_staff(x_api_key: Optional[str] = Header(None)):
         raise HTTPException(401, "Invalid API key")
 
 
-def require_admin(x_api_key: Optional[str] = Header(None)):
-    if not x_api_key or not hmac.compare_digest(x_api_key, ADMIN_API_KEY):
-        raise HTTPException(401, "Invalid admin API key")
+
 
 
 def room_from_session(session: Optional[str]) -> dict:
@@ -877,8 +874,7 @@ def staff_update(request_id: int, body: StatusIn):
 
 
 @app.post("/api/admin/rooms/bulk")
-async def bulk_rooms(request: Request, x_api_key: Optional[str] = Header(None)):
-    require_admin(x_api_key)
+async def bulk_rooms(request: Request):
     try:
         data = await request.json()
     except Exception:
@@ -892,7 +888,7 @@ async def bulk_rooms(request: Request, x_api_key: Optional[str] = Header(None)):
     return {"registered": count}
 
 
-@app.delete("/api/admin/rooms/{hotel_id}/{room_number}", dependencies=[Depends(require_admin)])
+@app.delete("/api/admin/rooms/{hotel_id}/{room_number}")
 def deactivate_room(hotel_id: str, room_number: str):
     ok = db_deactivate_room(hotel_id, room_number)
     if not ok:
@@ -902,8 +898,7 @@ def deactivate_room(hotel_id: str, room_number: str):
 
 @app.get("/api/admin/firebase-test")
 @app.get("/api/admin/db-test")
-def firebase_test(x_api_key: Optional[str] = Header(None)):
-    require_admin(x_api_key)
+def firebase_test():
     db_url = os.getenv("FIREBASE_DATABASE_URL") or os.getenv("firebase_database_url", "")
     if not db_url:
         return {
