@@ -1,10 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "python -V",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/:path*",
-      "destination": "/index.py"
+      "src": "/(.*)",
+      "dest": "/index.py?nxt_path=/$1"
     }
   ]
 }
