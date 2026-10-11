@@ -62,12 +62,17 @@ FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL") or os.getenv("firebas
 firebase_initialized = False
 
 
+last_firebase_error: str = ""
+
+
 def init_firebase() -> bool:
-    global firebase_initialized
+    global firebase_initialized, last_firebase_error
     if firebase_initialized:
         return True
 
-    if not FIREBASE_DATABASE_URL:
+    db_url = os.getenv("FIREBASE_DATABASE_URL") or os.getenv("firebase_database_url", "")
+    if not db_url:
+        last_firebase_error = "FIREBASE_DATABASE_URL is not set"
         return False
 
     try:
@@ -79,13 +84,27 @@ def init_firebase() -> bool:
             return True
 
         cred = None
+        raw_json = (os.getenv("FIREBASE_CREDENTIALS_JSON") or os.getenv("firebase_credentials_json") or "").strip()
+
         # Option 1: Inline JSON string (perfect for Vercel/Render env vars)
-        if FIREBASE_CREDENTIALS_JSON and FIREBASE_CREDENTIALS_JSON.strip():
+        if raw_json:
+            # Clean any leading/trailing garbage characters (like a trailing '4')
+            if "{" in raw_json and "}" in raw_json:
+                start = raw_json.find("{")
+                end = raw_json.rfind("}") + 1
+                raw_json = raw_json[start:end]
+
             try:
-                cred_dict = json.loads(FIREBASE_CREDENTIALS_JSON.strip())
+                cred_dict = json.loads(raw_json)
+                if isinstance(cred_dict, dict) and "private_key" in cred_dict:
+                    # Fix escaped newlines if Vercel double-escaped them
+                    pk = str(cred_dict["private_key"])
+                    if "\\n" in pk:
+                        cred_dict["private_key"] = pk.replace("\\n", "\n")
                 cred = credentials.Certificate(cred_dict)
             except Exception as e:
-                print(f"Warning: Failed to parse FIREBASE_CREDENTIALS_JSON: {e}")
+                last_firebase_error = f"Error parsing FIREBASE_CREDENTIALS_JSON: {e}"
+                print(f"Warning: {last_firebase_error}")
 
         # Option 2: File path (local development)
         if not cred:
@@ -100,19 +119,26 @@ def init_firebase() -> bool:
             ]
             for c in candidates:
                 if c.is_file():
-                    cred = credentials.Certificate(str(c))
-                    break
+                    try:
+                        cred = credentials.Certificate(str(c))
+                        break
+                    except Exception as e:
+                        last_firebase_error = f"Error loading file {c}: {e}"
 
         if cred:
-            clean_url = FIREBASE_DATABASE_URL.strip()
+            clean_url = db_url.strip()
             firebase_admin.initialize_app(cred, {"databaseURL": clean_url})
             firebase_initialized = True
+            last_firebase_error = ""
             print("Successfully connected to Firebase Realtime Database.")
             return True
         else:
+            if not last_firebase_error:
+                last_firebase_error = "No valid credentials found (FIREBASE_CREDENTIALS_JSON is empty or key file not found)."
             return False
     except Exception as exc:
-        print(f"Warning: Firebase Realtime Database initialization error: {exc}")
+        last_firebase_error = f"Firebase initialization exception: {exc}"
+        print(f"Warning: {last_firebase_error}")
         return False
 
 
@@ -875,13 +901,16 @@ def firebase_test(x_api_key: Optional[str] = Header(None)):
             "error": "No FIREBASE_DATABASE_URL environment variable found. Please set FIREBASE_DATABASE_URL in .env.",
         }
 
+    raw_json = (os.getenv("FIREBASE_CREDENTIALS_JSON") or os.getenv("firebase_credentials_json") or "").strip()
     ok = init_firebase()
     if not ok:
         return {
             "ok": False,
             "connected": False,
             "database_url": db_url,
-            "error": "Firebase SDK could not initialize. Check FIREBASE_CREDENTIALS_PATH or FIREBASE_CREDENTIALS_JSON in .env.",
+            "has_credentials_json": bool(raw_json),
+            "credentials_json_length": len(raw_json),
+            "error": last_firebase_error or "Firebase SDK could not initialize. Check FIREBASE_CREDENTIALS_PATH or FIREBASE_CREDENTIALS_JSON in .env.",
         }
 
     try:
