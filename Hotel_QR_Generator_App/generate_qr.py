@@ -88,13 +88,12 @@ def make_label(url, hotel_name, number, logo_path=None):
     for off, w in [(10, 2), (18, 1)]:
         draw.rectangle([off, off, LABEL_W - off, LABEL_H - off], outline=GOLD, width=w)
 
-    # ── Hotel logo circle ─────────────────────────────────────
+    # ── Hotel logo circle (only if logo provided) ─────────────
     lx, ly, lr = LABEL_W // 2, 108, 52
-    for gap, w in [(10, 2), (6, 1)]:  # double ring
-        draw.ellipse([lx-lr-gap, ly-lr-gap, lx+lr+gap, ly+lr+gap], outline=GOLD, width=w)
-    draw.ellipse([lx-lr, ly-lr, lx+lr, ly+lr], fill=DARK)  # black fill
-
     if logo_path:
+        for gap, w in [(10, 2), (6, 1)]:  # double ring
+            draw.ellipse([lx-lr-gap, ly-lr-gap, lx+lr+gap, ly+lr+gap], outline=GOLD, width=w)
+        draw.ellipse([lx-lr, ly-lr, lx+lr, ly+lr], fill=DARK)
         try:
             logo_img = Image.open(logo_path).convert("RGBA")
             logo_img = logo_img.resize((lr * 2, lr * 2), Image.LANCZOS)
@@ -102,9 +101,10 @@ def make_label(url, hotel_name, number, logo_path=None):
             ImageDraw.Draw(mask).ellipse([0, 0, lr * 2 - 1, lr * 2 - 1], fill=255)
             img.paste(logo_img, (lx - lr, ly - lr), mask)
         except Exception:
-            pass  # keep blank gold-ringed circle
-
-    y = ly + lr + 22
+            pass
+        y = ly + lr + 22
+    else:
+        y = 40  # no logo — start content higher
 
     # ── Hotel name ────────────────────────────────────────────
     centered(draw, y, hotel_name.upper()[:24], font(32), GOLD)
