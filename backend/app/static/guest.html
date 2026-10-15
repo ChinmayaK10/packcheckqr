@@ -10,6 +10,19 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
+  <script>
+    // Immediate swap if enhanced gold logo was cached to avoid flash of dark tagline
+    (function() {
+      try {
+        var cached = sessionStorage.getItem('pc_gold_logo_v1');
+        if (cached) {
+          var style = document.createElement('style');
+          style.innerHTML = '.logo-img { content: url("' + cached + '"); }';
+          document.head.appendChild(style);
+        }
+      } catch(e) {}
+    })();
+  </script>
 </head>
 <body>
   <div id="app" class="app-root">
@@ -33,9 +46,10 @@
           </div>
 
           <div class="screen-head">
-            <p class="eyebrow">WELCOME</p>
-            <h1 class="screen-title" id="s0-title">Let's get you checked out</h1>
-            <p class="screen-subtitle">Enter your room number to begin.</p>
+            <p class="eyebrow">WELCOME TO</p>
+            <h1 class="screen-title" id="s0-title">Royal Rities</h1>
+            <p class="screen-subheading">Your Comfort, Our Priority.</p>
+            <p class="screen-subtitle">Ready to check out? Enter your room details below to request checkout assistance and make your departure seamless.</p>
           </div>
 
           <div class="input-group-stack">
@@ -80,8 +94,8 @@
           </div>
 
           <div class="screen-head">
-            <p class="eyebrow">CHECKOUT REQUEST</p>
-            <h1 class="screen-title" id="s1-title">What do you need?</h1>
+            <p class="eyebrow">CHECKOUT SERVICE</p>
+            <h1 class="screen-title" id="s1-title">How may we assist you?</h1>
           </div>
 
           <div class="option-group" role="radiogroup" aria-labelledby="s1-title">
@@ -194,8 +208,29 @@
             </label>
           </div>
 
-          <div class="mb-desc" style="font-size: 13px; color: var(--color-text-muted, #94a3b8); line-height: 1.6; margin: 12px 0 16px; padding: 12px 14px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid #f59e0b;">
-            🍫 <b>Minibar includes:</b> bottled water, soft drinks, fruit juices, beer, wine, mini spirits, chocolates, cookies, nuts and assorted snacks — all stored in your in-room refrigerator. Any items consumed will be added to your checkout bill.
+          <div class="minibar-info-card">
+            <div class="minibar-info-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="minibar-info-icon" aria-hidden="true">
+                <path d="M8 3H6l-1 6h14l-1-6h-2"/><path d="M6 9v12h12V9"/><path d="M9 14h6"/>
+              </svg>
+              <span>Minibar Inclusions</span>
+            </div>
+            <p class="minibar-info-subtitle">Items provided in your room refreshment bar:</p>
+            <div class="minibar-items-grid">
+              <span class="mb-pill">Red Bull (250ml)</span>
+              <span class="mb-pill">Coca-Cola (250ml)</span>
+              <span class="mb-pill">Sprite (250ml)</span>
+              <span class="mb-pill">Mix Fruit Juice</span>
+              <span class="mb-pill">Mineral Water (1L)</span>
+              <span class="mb-pill">Budweiser Premium (500ml)</span>
+              <span class="mb-pill">Budweiser Magnum (500ml)</span>
+              <span class="mb-pill">Pringles</span>
+              <span class="mb-pill">Lay's</span>
+              <span class="mb-pill">Chocolate</span>
+              <span class="mb-pill">Salted Peanuts</span>
+              <span class="mb-pill">Aloo Bhujia</span>
+            </div>
+            <p class="minibar-info-note">Any items consumed during your stay will be posted to your room checkout bill.</p>
           </div>
 
           <div id="s2-message-group" style="display:none; width:100%;">
@@ -337,17 +372,10 @@
             </div>
           </div>
 
-          <button class="btn btn-ghost btn-restart" id="btn-restart">Start over</button>
-
         </div>
       </section>
 
     </main>
-
-    <!-- Footer: reset hint (hidden on first & last screen) -->
-    <div class="footer-hint" id="footerHint">
-      <button class="reset-btn" id="resetBtn">RESET</button>
-    </div>
 
   </div>
   <script src="/static/app.js"></script>

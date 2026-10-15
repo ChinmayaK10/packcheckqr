@@ -116,7 +116,7 @@ function goToScreen(n) {
   dom.progress.style.width = ((n / (TOTAL_SCREENS - 1)) * 100).toFixed(0) + '%';
 
   // Show RESET only on mid-flow screens (not welcome, not success)
-  dom.resetBtn.style.display = (n > 0 && n < 4) ? 'block' : 'none';
+  if (dom.resetBtn) dom.resetBtn.style.display = (n > 0 && n < 4) ? 'block' : 'none';
 }
 
 /* ─── S0: ROOM & FLOOR ENTRY ──────────────────────────────── */
@@ -384,6 +384,99 @@ function resetApp() {
   goToScreen(0);
 }
 
+/* ─── LOGO TAGLINE ENHANCEMENT ────────────────────────────── */
+/**
+ * Automatically converts the dark/black tagline in the PackCheck logo
+ * ("OPERATIONAL INTELLIGENCE. VERIFIED. REAL-TIME.") into rich radiant gold (#D6B150),
+ * making it crystal clear and perfectly visible on both dark and light themes.
+ */
+function enhancePackCheckLogo() {
+  const STORAGE_KEY = 'pc_gold_logo_v1';
+  try {
+    const cached = sessionStorage.getItem(STORAGE_KEY);
+    if (cached) {
+      document.querySelectorAll('.logo-img').forEach(img => {
+        if (img.src !== cached) img.src = cached;
+      });
+      return;
+    }
+  } catch (_) {}
+
+  const firstImg = document.querySelector('.logo-img');
+  if (!firstImg) return;
+
+  const sample = new Image();
+  sample.crossOrigin = 'anonymous';
+  sample.src = firstImg.src;
+
+  const process = () => {
+    try {
+      const w = sample.naturalWidth;
+      const h = sample.naturalHeight;
+      if (!w || !h) return;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(sample, 0, 0);
+
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+
+      // Tagline is below "PACK-CHECK" on the right side:
+      // x > 32% of width, y between 45% and 72% of height.
+      let modified = 0;
+      const startY = Math.floor(h * 0.45);
+      const endY   = Math.floor(h * 0.72);
+      const startX = Math.floor(w * 0.32);
+
+      for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const a = data[idx + 3];
+          if (a > 15) {
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            // Identify the black/dark text pixels
+            if (r < 75 && g < 75 && b < 75) {
+              // Convert to vibrant gold (#D6B150) matching the PACK-CHECK monogram
+              data[idx]     = 214; // R
+              data[idx + 1] = 177; // G
+              data[idx + 2] = 80;  // B
+              // Sharpen soft anti-aliased edge pixels for clean visibility on dark backgrounds
+              if (a < 210 && a > 30) {
+                data[idx + 3] = Math.min(255, Math.round(a * 1.35));
+              }
+              modified++;
+            }
+          }
+        }
+      }
+
+      if (modified > 0) {
+        ctx.putImageData(imgData, 0, 0);
+        const goldLogoUrl = canvas.toDataURL('image/png');
+        try {
+          sessionStorage.setItem(STORAGE_KEY, goldLogoUrl);
+        } catch (_) {}
+        document.querySelectorAll('.logo-img').forEach(img => {
+          img.src = goldLogoUrl;
+        });
+      }
+    } catch (err) {
+      console.warn('PackCheck logo enhancement:', err);
+    }
+  };
+
+  if (sample.complete && sample.naturalWidth) {
+    process();
+  } else {
+    sample.onload = process;
+  }
+}
+
 /* ─── THEME ───────────────────────────────────────────────── */
 function initTheme() {
   const mq    = window.matchMedia('(prefers-color-scheme: dark)');
@@ -395,7 +488,9 @@ function initTheme() {
 /* ─── INIT ────────────────────────────────────────────────── */
 async function init() {
   dom.progress.style.width   = '0%';
-  dom.resetBtn.style.display = 'none';
+  if (dom.resetBtn) dom.resetBtn.style.display = 'none';
+
+  enhancePackCheckLogo();
 
   document.querySelectorAll('.screen').forEach(s => {
     if (s.id === 's0') {
@@ -419,10 +514,9 @@ async function init() {
       if (!res.ok) throw new Error('QR not active');
       const data = await res.json();
       state.hotelName = data.hotel_name || '';
-      // Display hotel name in the welcome heading
-      const subtitle = document.querySelector('#s0 .screen-subtitle');
-      if (subtitle && state.hotelName) {
-        subtitle.textContent = `Welcome to ${state.hotelName}. Enter your room number to begin.`;
+      const title = document.getElementById('s0-title');
+      if (title && state.hotelName) {
+        title.textContent = state.hotelName === 'RoyalRitis' ? 'Royal Rities' : state.hotelName;
       }
     } catch {
       // QR is invalid or expired — lock the form and show an error
@@ -442,8 +536,8 @@ async function init() {
   initS2();
   initS3();
 
-  dom.btnRestart.addEventListener('click', resetApp);
-  dom.resetBtn.addEventListener('click', resetApp);
+  if (dom.btnRestart) dom.btnRestart.addEventListener('click', resetApp);
+  if (dom.resetBtn) dom.resetBtn.addEventListener('click', resetApp);
 }
 
 document.addEventListener('DOMContentLoaded', init);

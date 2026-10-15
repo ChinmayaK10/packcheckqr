@@ -233,6 +233,11 @@ body::before {
   object-fit: contain;
   /* Preserve sharp rendering — never scale with CSS transforms */
   image-rendering: auto;
+  transition: filter 0.3s ease;
+}
+
+[data-theme="dark"] .logo-img {
+  filter: drop-shadow(0 2px 14px rgba(201, 168, 76, 0.14));
 }
 
 /* ── SCREEN HEAD ──────────────────────────────────────────── */
@@ -257,6 +262,17 @@ body::before {
   line-height: 1.15;
   color: var(--text-primary);
   letter-spacing: -0.01em;
+}
+
+.screen-subheading {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-size: 1.15rem;
+  color: var(--gold-400);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  margin-top: -0.15rem;
+  line-height: 1.3;
 }
 
 .screen-subtitle {
@@ -522,6 +538,81 @@ body::before {
 
 .option-card:has(.opt-radio:checked) .opt-selector::after {
   transform: scale(1);
+}
+
+/* ── MINIBAR ITEMS CARD ──────────────────────────────────── */
+.minibar-info-card {
+  margin: 1.15rem 0 1rem;
+  padding: 1.1rem 1.15rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: border-color 0.2s ease;
+}
+
+[data-theme="dark"] .minibar-info-card {
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(201, 168, 76, 0.18);
+}
+
+.minibar-info-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--gold-400);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.minibar-info-icon {
+  width: 16px;
+  height: 16px;
+  stroke: var(--gold-400);
+  flex-shrink: 0;
+}
+
+.minibar-info-subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.minibar-items-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.2rem 0;
+}
+
+.mb-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: rgba(201, 168, 76, 0.08);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  border-radius: 20px;
+  padding: 0.32rem 0.65rem;
+  line-height: 1.2;
+}
+
+[data-theme="dark"] .mb-pill {
+  color: #f3ede2;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(201, 168, 76, 0.24);
+}
+
+.minibar-info-note {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+  margin-top: 0.1rem;
 }
 
 /* ── REVIEW CARD ──────────────────────────────────────────── */
