@@ -516,7 +516,7 @@ async function init() {
       state.hotelName = data.hotel_name || '';
       const title = document.getElementById('s0-title');
       if (title && state.hotelName) {
-        title.textContent = state.hotelName === 'RoyalRitis' ? 'Royal Rities' : state.hotelName;
+        title.textContent = state.hotelName;
       }
     } catch {
       // QR is invalid or expired — lock the form and show an error
