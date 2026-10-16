@@ -37,7 +37,7 @@ RequestType = Literal["checkout", "cart"]
 Status = Literal["new", "in_progress", "done", "cancelled"]
 
 signer = URLSafeTimedSerializer(SECRET_KEY, salt="guest-session")
-_verify_attempts: dict[str, list[float]] = {}
+_verify_attempts: dict[str, dict] = {}  # {token: {"count": int, "locked_at": float|None}}
 
 rooms_db: dict[str, dict] = {}
 requests_db: list[dict] = []
@@ -822,14 +822,39 @@ def verify(body: VerifyIn):
         raise HTTPException(404, "This QR code is not valid.")
 
     now = time.time()
-    hits = [t for t in _verify_attempts.get(body.token, []) if now - t < VERIFY_WINDOW]
-    if len(hits) >= MAX_VERIFY_ATTEMPTS:
-        raise HTTPException(429, "Too many attempts. Please try again in a few minutes or call reception.")
+    attempt_data = _verify_attempts.get(body.token, {"count": 0, "locked_at": None})
+
+    # Check if currently locked out after exhausting all attempts
+    if attempt_data["locked_at"] is not None:
+        elapsed = now - attempt_data["locked_at"]
+        if elapsed < VERIFY_WINDOW:
+            remaining_minutes = max(1, round((VERIFY_WINDOW - elapsed) / 60))
+            raise HTTPException(
+                429,
+                f"Too many attempts. Please try again in {remaining_minutes} minute(s) or call reception."
+            )
+        else:
+            # Lockout expired — full reset
+            attempt_data = {"count": 0, "locked_at": None}
+            _verify_attempts.pop(body.token, None)
 
     if not hmac.compare_digest(norm(body.room_number), norm(room["room_number"])):
-        hits.append(now)
-        _verify_attempts[body.token] = hits
-        raise HTTPException(400, "That room number does not match this room.")
+        new_count = attempt_data["count"] + 1
+        attempts_left = MAX_VERIFY_ATTEMPTS - new_count
+
+        if new_count >= MAX_VERIFY_ATTEMPTS:
+            # All attempts exhausted — start the hard lockout NOW
+            _verify_attempts[body.token] = {"count": new_count, "locked_at": now}
+            raise HTTPException(
+                429,
+                f"Too many attempts. Please try again in {VERIFY_WINDOW // 60} minutes or call reception."
+            )
+
+        _verify_attempts[body.token] = {"count": new_count, "locked_at": None}
+        raise HTTPException(
+            400,
+            detail={"message": "That room number does not match this room.", "attempts_left": attempts_left}
+        )
 
     _verify_attempts.pop(body.token, None)
     return {"session": signer.dumps({"t": body.token}), "expires_in": SESSION_TTL}

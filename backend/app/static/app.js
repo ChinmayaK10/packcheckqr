@@ -38,6 +38,8 @@ const dom = {
   s0:         el('s0'),
   inpRoom:    el('inp-room'),
   s0Error:    el('s0-error'),
+  s0Attempts: el('s0-attempts'),
+  s0AttemptsText: el('s0-attempts-text'),
   btnS0Next:  el('btn-s0-next'),
 
   /* S1 */
@@ -145,12 +147,25 @@ function initS0() {
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || 'Room number does not match. Please check and try again.');
+        const detail = data.detail;
+        if (detail && typeof detail === 'object') {
+          // Server returned {message, attempts_left}
+          if (typeof detail.attempts_left === 'number' && detail.attempts_left > 0) {
+            showS0Attempts(detail.attempts_left);
+          } else {
+            hideS0Attempts();
+          }
+          throw new Error(detail.message || 'Room number does not match. Please check and try again.');
+        } else {
+          hideS0Attempts();
+          throw new Error(detail || 'Room number does not match. Please check and try again.');
+        }
       }
       const data = await res.json();
       state.session = data.session;
       state.room    = room;
       hideS0Error();
+      hideS0Attempts();
       goToScreen(1);
     } catch (err) {
       showS0Error(err.message);
@@ -176,6 +191,19 @@ function showS0Error(msg) {
 
 function hideS0Error() {
   dom.s0Error.classList.add('hidden');
+}
+
+function showS0Attempts(n) {
+  if (!dom.s0Attempts || !dom.s0AttemptsText) return;
+  dom.s0AttemptsText.textContent =
+    n === 1
+      ? '⚠️ Last attempt remaining before you are locked out for 10 minutes.'
+      : `⚠️ ${n} attempt${n === 1 ? '' : 's'} remaining before 10-minute lockout.`;
+  dom.s0Attempts.classList.remove('hidden');
+}
+
+function hideS0Attempts() {
+  if (dom.s0Attempts) dom.s0Attempts.classList.add('hidden');
 }
 
 /* ─── S1: SERVICE SELECTION ───────────────────────────────── */
